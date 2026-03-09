@@ -1,0 +1,126 @@
+import Anthropic from "@anthropic-ai/sdk";
+import type { PRMetrics } from "@/types/github";
+import type { LinearMetrics } from "@/types/linear";
+import type { SlackMetrics } from "@/types/slack";
+import type { HealthSummary, WeeklyNarrative } from "@/types/metrics";
+
+const client = new Anthropic();
+
+export async function generateHealthSummary(
+  github: PRMetrics,
+  linear: LinearMetrics,
+  slack: SlackMetrics
+): Promise<HealthSummary> {
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-5-20250514",
+    max_tokens: 1024,
+    system: `You are an engineering team health analyst. Analyze the provided metrics and return ONLY a JSON object (no markdown, no code fences) with this exact shape:
+{
+  "overallHealth": "healthy" | "warning" | "critical",
+  "score": <number 0-100>,
+  "insights": [<3-5 short bullet strings>],
+  "recommendations": [<2-3 actionable strings>]
+}
+
+Scoring guide:
+- 80-100 = healthy: Low cycle times, good velocity, no major bottlenecks
+- 50-79 = warning: Some bottlenecks, stalled work, or overload signals
+- 0-49 = critical: Significant blockers, high cycle times, or severe overload
+
+Be specific. Cite numbers from the data. Focus on actionable intelligence.`,
+    messages: [
+      {
+        role: "user",
+        content: `Analyze these engineering team metrics from the past week:
+
+GitHub PR Metrics:
+- Open PRs: ${github.summary.totalOpenPRs}
+- Average cycle time: ${github.summary.avgCycleTimeHours} hours
+- Stale PRs (>7 days): ${github.summary.stalePRCount}
+- PRs needing review: ${github.summary.prsNeedingReview}
+- Review bottlenecks: ${JSON.stringify(github.reviewBottlenecks.slice(0, 5))}
+
+Linear Sprint Metrics:
+- Current cycle: ${linear.summary.currentCycleName} (${linear.summary.currentCycleProgress}% complete)
+- Active issues: ${linear.summary.totalActiveIssues}
+- Stalled issues (>5 days no update): ${linear.summary.stalledIssueCount}
+- Average velocity: ${linear.summary.avgVelocity} points/cycle
+- Workload: ${JSON.stringify(linear.workloadDistribution.slice(0, 5))}
+
+Slack Communication Metrics:
+- Total messages (7 days): ${slack.summary.totalMessages7Days}
+- Average response time: ${slack.summary.avgResponseMinutes} minutes
+- Most active channel: ${slack.summary.mostActiveChannel}
+- Potentially overloaded team members: ${slack.summary.potentiallyOverloaded}
+- Overload details: ${JSON.stringify(slack.overloadIndicators.filter((o) => o.isOverloaded))}`,
+      },
+    ],
+  });
+
+  const text =
+    message.content[0].type === "text" ? message.content[0].text : "";
+
+  try {
+    const parsed = JSON.parse(text);
+    return {
+      overallHealth: parsed.overallHealth,
+      score: parsed.score,
+      insights: parsed.insights,
+      recommendations: parsed.recommendations,
+      generatedAt: new Date().toISOString(),
+    };
+  } catch {
+    return {
+      overallHealth: "warning",
+      score: 50,
+      insights: ["Unable to parse AI analysis. Raw response available."],
+      recommendations: ["Check API configuration and retry."],
+      generatedAt: new Date().toISOString(),
+    };
+  }
+}
+
+export async function generateWeeklyNarrative(
+  github: PRMetrics,
+  linear: LinearMetrics,
+  slack: SlackMetrics
+): Promise<WeeklyNarrative> {
+  const weekOf = new Date();
+  weekOf.setDate(weekOf.getDate() - weekOf.getDay()); // Start of week
+
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-5-20250514",
+    max_tokens: 2048,
+    system: `You are an engineering team health analyst writing a weekly team health narrative. Write a concise, actionable summary in 3-4 short paragraphs. Use plain text, no markdown headers. Be direct and specific — cite numbers, name patterns, and call out risks. The tone should be like a sharp engineering manager's weekly update.`,
+    messages: [
+      {
+        role: "user",
+        content: `Write a weekly team health narrative based on these metrics:
+
+GitHub Trends:
+${JSON.stringify(github.cycleTimeTrend, null, 2)}
+Stale PRs: ${JSON.stringify(github.stalePRs, null, 2)}
+Review bottlenecks: ${JSON.stringify(github.reviewBottlenecks, null, 2)}
+
+Linear Sprint Data:
+Velocity trend: ${JSON.stringify(linear.velocityTrend, null, 2)}
+Stalled issues: ${JSON.stringify(linear.stalledIssues, null, 2)}
+Workload: ${JSON.stringify(linear.workloadDistribution, null, 2)}
+
+Slack Activity:
+Response times: ${JSON.stringify(slack.responseTimeTrend, null, 2)}
+Channel activity: ${JSON.stringify(slack.channelActivity, null, 2)}
+Overload indicators: ${JSON.stringify(slack.overloadIndicators, null, 2)}`,
+      },
+    ],
+  });
+
+  const text =
+    message.content[0].type === "text" ? message.content[0].text : "";
+
+  return {
+    narrative: text,
+    weekOf: weekOf.toISOString().split("T")[0],
+    generatedAt: new Date().toISOString(),
+  };
+}

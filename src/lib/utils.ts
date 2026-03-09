@@ -1,0 +1,46 @@
+import { clsx, type ClassValue } from "clsx";
+
+export function cn(...inputs: ClassValue[]) {
+  return clsx(inputs);
+}
+
+export function getISOWeek(date: Date): string {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  const weekNum =
+    1 +
+    Math.round(
+      ((d.getTime() - week1.getTime()) / 86400000 -
+        3 +
+        ((week1.getDay() + 6) % 7)) /
+        7
+    );
+  return `${d.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+}
+
+export function daysBetween(date1: Date, date2: Date): number {
+  const diffMs = Math.abs(date2.getTime() - date1.getTime());
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+export function hoursBetween(date1: Date, date2: Date): number {
+  const diffMs = Math.abs(date2.getTime() - date1.getTime());
+  return Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
+}
+
+export function formatDate(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
+
+export function daysAgo(days: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d;
+}
+
+export function minutesBetween(date1: Date, date2: Date): number {
+  const diffMs = Math.abs(date2.getTime() - date1.getTime());
+  return Math.round((diffMs / (1000 * 60)) * 10) / 10;
+}
