@@ -31,10 +31,21 @@ export interface StalePR {
   reviewers: string[];
 }
 
+export interface OpenPR {
+  number: number;
+  title: string;
+  author: string;
+  url: string;
+  daysOpen: number;
+  reviewers: string[];
+  isDraft: boolean;
+}
+
 export interface PRMetrics {
   cycleTimeTrend: CycleTimeDataPoint[];
   reviewBottlenecks: ReviewBottleneck[];
   stalePRs: StalePR[];
+  openPRs: OpenPR[];
   summary: {
     totalOpenPRs: number;
     avgCycleTimeHours: number;

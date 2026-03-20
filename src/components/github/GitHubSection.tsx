@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { CycleTimeChart } from "./CycleTimeChart";
 import { ReviewBottlenecks } from "./ReviewBottlenecks";
 import { StalePRsList } from "./StalePRsList";
+import { OpenPRsList } from "./OpenPRsList";
 
 const GitHubIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
@@ -131,7 +132,13 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
       <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard label="Open PRs" value={data.summary.totalOpenPRs} />
+        <MetricCard
+          label="Open PRs"
+          value={data.summary.totalOpenPRs}
+          onClick={() => {
+            document.getElementById("open-prs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+        />
         <MetricCard
           label="Avg Cycle Time"
           value={`${data.summary.avgCycleTimeHours}h`}
@@ -154,6 +161,13 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
           Cycle Time Trend
         </h3>
         <CycleTimeChart data={data.cycleTimeTrend} />
+      </Card>
+
+      <Card>
+        <h3 id="open-prs" className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Open PRs
+        </h3>
+        <OpenPRsList data={data.openPRs} />
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">

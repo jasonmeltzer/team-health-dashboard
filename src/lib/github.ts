@@ -1,5 +1,5 @@
 import { Octokit } from "octokit";
-import type { PRMetrics, CycleTimeDataPoint, ReviewBottleneck, BottleneckPR, StalePR } from "@/types/github";
+import type { PRMetrics, CycleTimeDataPoint, ReviewBottleneck, BottleneckPR, StalePR, OpenPR } from "@/types/github";
 import { getISOWeek, daysBetween, hoursBetween, daysAgo } from "@/lib/utils";
 import { getConfig } from "@/lib/config";
 
@@ -210,10 +210,26 @@ export async function fetchGitHubMetrics(
         ) / 10
       : 0;
 
+  // Open PRs list
+  const openPRsList: OpenPR[] = openPRs
+    .map((pr) => ({
+      number: pr.number,
+      title: pr.title,
+      author: pr.user?.login || "unknown",
+      url: pr.html_url,
+      daysOpen: daysBetween(new Date(pr.created_at), now),
+      reviewers: (pr.requested_reviewers || [])
+        .filter((r) => r !== null && "login" in r)
+        .map((r) => (r as { login: string }).login),
+      isDraft: pr.draft || false,
+    }))
+    .sort((a, b) => b.daysOpen - a.daysOpen);
+
   return {
     cycleTimeTrend,
     reviewBottlenecks,
     stalePRs,
+    openPRs: openPRsList,
     summary: {
       totalOpenPRs: openPRs.length,
       avgCycleTimeHours: avgCycleTime,
