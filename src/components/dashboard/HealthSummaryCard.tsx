@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 
 export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
-  const { data, loading, error, notConfigured, refetch } = useApiData<HealthSummary>(
+  const { data, loading, error, notConfigured, setupHint, refetch } = useApiData<HealthSummary>(
     "/api/health-summary",
     refreshKey
   );
@@ -24,6 +24,27 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
             <Skeleton className="h-6 w-48" />
             <Skeleton className="h-4 w-96" />
             <Skeleton className="h-4 w-72" />
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (setupHint) {
+    return (
+      <Card className="col-span-full">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <span className="text-xl text-zinc-400">?</span>
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+              Team Health
+            </h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              AI-powered health score, insights, and recommendations will appear here.
+            </p>
+            <p className="mt-2 text-xs text-zinc-400">{setupHint}</p>
           </div>
         </div>
       </Card>

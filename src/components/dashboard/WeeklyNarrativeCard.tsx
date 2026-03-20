@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 
 export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
-  const { data, loading, error, notConfigured, refetch } = useApiData<WeeklyNarrative>(
+  const { data, loading, error, notConfigured, setupHint, refetch } = useApiData<WeeklyNarrative>(
     "/api/weekly-narrative",
     refreshKey
   );
@@ -25,6 +25,20 @@ export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
           <Skeleton className="mt-4 h-4 w-full" />
           <Skeleton className="h-4 w-5/6" />
         </div>
+      </Card>
+    );
+  }
+
+  if (setupHint) {
+    return (
+      <Card className="col-span-full">
+        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+          Weekly Summary
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          A narrative summary of your team&apos;s week — trends, risks, and highlights — will appear here.
+        </p>
+        <p className="mt-2 text-xs text-zinc-400">{setupHint}</p>
       </Card>
     );
   }

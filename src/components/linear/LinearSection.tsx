@@ -176,7 +176,19 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
     refreshKey
   );
 
-  if (notConfigured) return null;
+  if (notConfigured) {
+    return (
+      <Card>
+        <SectionHeader title="Linear" icon={<LinearIcon />} />
+        <p className="text-sm text-zinc-500">
+          Sprint velocity, workload distribution, time-in-state analysis, and stalled issue tracking.
+        </p>
+        <p className="mt-2 text-xs text-zinc-400">
+          Add your Linear API key and team ID in Settings to enable.
+        </p>
+      </Card>
+    );
+  }
 
   const controls = (
     <div className="flex items-center gap-2">

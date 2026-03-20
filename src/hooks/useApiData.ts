@@ -8,17 +8,23 @@ export function useApiData<T>(url: string, refreshKey: number) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notConfigured, setNotConfigured] = useState(false);
+  const [setupHint, setSetupHint] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     setNotConfigured(false);
+    setSetupHint(null);
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json: ApiResponse<T> = await res.json();
       if (json.notConfigured) {
         setNotConfigured(true);
+        return;
+      }
+      if (json.setupHint) {
+        setSetupHint(json.setupHint);
         return;
       }
       if (json.error) throw new Error(json.error);
@@ -34,5 +40,5 @@ export function useApiData<T>(url: string, refreshKey: number) {
     fetchData();
   }, [fetchData, refreshKey]);
 
-  return { data, loading, error, notConfigured, refetch: fetchData };
+  return { data, loading, error, notConfigured, setupHint, refetch: fetchData };
 }

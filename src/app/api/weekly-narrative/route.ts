@@ -1,7 +1,7 @@
 import { fetchGitHubMetrics } from "@/lib/github";
 import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
-import { generateWeeklyNarrative, isAIConfigured } from "@/lib/claude";
+import { generateWeeklyNarrative, isAIConfigured, OllamaNotRunningError } from "@/lib/claude";
 import { getConfig } from "@/lib/config";
 
 export async function GET() {
@@ -69,6 +69,9 @@ export async function GET() {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
+    if (error instanceof OllamaNotRunningError) {
+      return Response.json({ setupHint: error.message });
+    }
     const message =
       error instanceof Error
         ? error.message

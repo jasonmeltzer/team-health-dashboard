@@ -23,7 +23,19 @@ export function SlackSection({ refreshKey }: { refreshKey: number }) {
     refreshKey
   );
 
-  if (notConfigured) return null;
+  if (notConfigured) {
+    return (
+      <Card>
+        <SectionHeader title="Slack" icon={<SlackIcon />} />
+        <p className="text-sm text-zinc-500">
+          Response times, channel activity, and team overload indicators.
+        </p>
+        <p className="mt-2 text-xs text-zinc-400">
+          Add your Slack bot token and channel IDs in Settings to enable.
+        </p>
+      </Card>
+    );
+  }
 
   if (loading) {
     return (

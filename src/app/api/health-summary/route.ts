@@ -1,7 +1,7 @@
 import { fetchGitHubMetrics } from "@/lib/github";
 import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
-import { generateHealthSummary, isAIConfigured } from "@/lib/claude";
+import { generateHealthSummary, isAIConfigured, OllamaNotRunningError } from "@/lib/claude";
 import { getConfig } from "@/lib/config";
 
 export async function GET() {
@@ -75,6 +75,9 @@ export async function GET() {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
+    if (error instanceof OllamaNotRunningError) {
+      return Response.json({ setupHint: error.message });
+    }
     const message =
       error instanceof Error ? error.message : "Failed to generate health summary";
     return Response.json({ error: message }, { status: 500 });

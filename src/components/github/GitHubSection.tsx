@@ -42,7 +42,19 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
     refreshKey
   );
 
-  if (notConfigured) return null;
+  if (notConfigured) {
+    return (
+      <Card>
+        <SectionHeader title="GitHub" icon={<GitHubIcon />} />
+        <p className="text-sm text-zinc-500">
+          PR cycle time, review bottlenecks, and stale PR tracking.
+        </p>
+        <p className="mt-2 text-xs text-zinc-400">
+          Add your GitHub token, org, and repo in Settings to enable.
+        </p>
+      </Card>
+    );
+  }
 
   const controls = (
     <div className="flex flex-wrap items-center gap-3">

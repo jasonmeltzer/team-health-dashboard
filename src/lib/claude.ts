@@ -5,6 +5,15 @@ import type { SlackMetrics } from "@/types/slack";
 import type { HealthSummary, WeeklyNarrative } from "@/types/metrics";
 import { getConfig } from "@/lib/config";
 
+export class OllamaNotRunningError extends Error {
+  constructor(baseUrl: string, model: string) {
+    super(
+      `Could not connect to Ollama at ${baseUrl}. Install Ollama (https://ollama.com) and run: ollama pull ${model}`
+    );
+    this.name = "OllamaNotRunningError";
+  }
+}
+
 type AIProvider = "anthropic" | "ollama";
 
 function getProvider(): AIProvider {
@@ -41,19 +50,28 @@ async function chatCompletion(
   const baseUrl = getConfig("OLLAMA_BASE_URL") || "http://localhost:11434";
   const model = getConfig("OLLAMA_MODEL") || "llama3";
 
-  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: userMessage },
-      ],
-      max_tokens: maxTokens,
-      temperature: 0.3,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userMessage },
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.3,
+      }),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("ECONNREFUSED") || msg.includes("fetch failed")) {
+      throw new OllamaNotRunningError(baseUrl, model);
+    }
+    throw err;
+  }
 
   if (!response.ok) {
     const body = await response.text();

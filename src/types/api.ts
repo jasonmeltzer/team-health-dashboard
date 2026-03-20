@@ -3,4 +3,5 @@ export interface ApiResponse<T> {
   error?: string;
   fetchedAt?: string;
   notConfigured?: boolean;
+  setupHint?: string;
 }
