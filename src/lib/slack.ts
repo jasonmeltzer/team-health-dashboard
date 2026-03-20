@@ -6,11 +6,12 @@ import type {
   OverloadIndicator,
 } from "@/types/slack";
 import { formatDate, minutesBetween, daysAgo } from "@/lib/utils";
+import { getConfig } from "@/lib/config";
 
 export async function fetchSlackMetrics(
   channelIds: string[]
 ): Promise<SlackMetrics> {
-  const client = new WebClient(process.env.SLACK_BOT_TOKEN);
+  const client = new WebClient(getConfig("SLACK_BOT_TOKEN"));
   const sevenDaysAgo = Math.floor(daysAgo(7).getTime() / 1000).toString();
 
   // Fetch user list for name mapping

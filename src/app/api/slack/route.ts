@@ -1,10 +1,11 @@
 import { fetchSlackMetrics } from "@/lib/slack";
+import { getConfig } from "@/lib/config";
 
 export async function GET() {
   try {
-    const channelIdsStr = process.env.SLACK_CHANNEL_IDS;
+    const channelIdsStr = getConfig("SLACK_CHANNEL_IDS");
 
-    if (!channelIdsStr || !process.env.SLACK_BOT_TOKEN) {
+    if (!channelIdsStr || !getConfig("SLACK_BOT_TOKEN")) {
       return Response.json({ notConfigured: true });
     }
 

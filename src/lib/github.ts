@@ -1,6 +1,7 @@
 import { Octokit } from "octokit";
 import type { PRMetrics, CycleTimeDataPoint, ReviewBottleneck, BottleneckPR, StalePR } from "@/types/github";
 import { getISOWeek, daysBetween, hoursBetween, daysAgo } from "@/lib/utils";
+import { getConfig } from "@/lib/config";
 
 export async function fetchGitHubMetrics(
   owner: string,
@@ -8,7 +9,7 @@ export async function fetchGitHubMetrics(
   staleDays: number = 7,
   lookbackDays: number = 30
 ): Promise<PRMetrics> {
-  const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+  const octokit = new Octokit({ auth: getConfig("GITHUB_TOKEN") });
   const since = daysAgo(lookbackDays).toISOString();
 
   // Fetch recent PRs — single page of 100 (sorted by updated desc),

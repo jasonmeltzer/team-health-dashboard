@@ -1,13 +1,14 @@
 import { NextRequest } from "next/server";
 import { fetchGitHubMetrics } from "@/lib/github";
+import { getConfig } from "@/lib/config";
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const owner = searchParams.get("owner") || process.env.GITHUB_ORG;
-    const repo = searchParams.get("repo") || process.env.GITHUB_REPO;
+    const owner = searchParams.get("owner") || getConfig("GITHUB_ORG");
+    const repo = searchParams.get("repo") || getConfig("GITHUB_REPO");
 
-    if (!owner || !repo || !process.env.GITHUB_TOKEN) {
+    if (!owner || !repo || !getConfig("GITHUB_TOKEN")) {
       return Response.json({ notConfigured: true });
     }
 

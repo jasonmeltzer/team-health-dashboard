@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
 import { fetchLinearMetrics } from "@/lib/linear";
+import { getConfig } from "@/lib/config";
 
 export async function GET(request: NextRequest) {
   try {
-    const teamId = process.env.LINEAR_TEAM_ID;
+    const teamId = getConfig("LINEAR_TEAM_ID");
 
-    if (!teamId || !process.env.LINEAR_API_KEY) {
+    if (!teamId || !getConfig("LINEAR_API_KEY")) {
       return Response.json({ notConfigured: true });
     }
 

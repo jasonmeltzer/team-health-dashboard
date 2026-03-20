@@ -1,29 +1,29 @@
 import { fetchGitHubMetrics } from "@/lib/github";
 import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
-import { generateWeeklyNarrative } from "@/lib/claude";
+import { generateWeeklyNarrative, isAIConfigured } from "@/lib/claude";
+import { getConfig } from "@/lib/config";
 
 export async function GET() {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!isAIConfigured()) {
       return Response.json({ notConfigured: true });
     }
 
-    const owner = process.env.GITHUB_ORG;
-    const repo = process.env.GITHUB_REPO;
-    const teamId = process.env.LINEAR_TEAM_ID;
-    const channelIds = process.env.SLACK_CHANNEL_IDS?.split(",").map((id) =>
-      id.trim()
-    );
+    const owner = getConfig("GITHUB_ORG");
+    const repo = getConfig("GITHUB_REPO");
+    const teamId = getConfig("LINEAR_TEAM_ID");
+    const channelIdsStr = getConfig("SLACK_CHANNEL_IDS");
+    const channelIds = channelIdsStr?.split(",").map((id) => id.trim());
 
     const [github, linear, slack] = await Promise.all([
-      owner && repo && process.env.GITHUB_TOKEN
+      owner && repo && getConfig("GITHUB_TOKEN")
         ? fetchGitHubMetrics(owner, repo).catch(() => null)
         : null,
-      teamId && process.env.LINEAR_API_KEY
+      teamId && getConfig("LINEAR_API_KEY")
         ? fetchLinearMetrics(teamId).catch(() => null)
         : null,
-      channelIds && process.env.SLACK_BOT_TOKEN
+      channelIds && getConfig("SLACK_BOT_TOKEN")
         ? fetchSlackMetrics(channelIds).catch(() => null)
         : null,
     ]);

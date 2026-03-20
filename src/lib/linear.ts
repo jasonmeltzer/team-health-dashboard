@@ -1,5 +1,6 @@
 import type { LinearMetrics, VelocityDataPoint, StalledIssue, WorkloadEntry, TimeInStateStats, TimeInStateData, TimeInStateIssue, LeadTimeTrendPoint } from "@/types/linear";
 import { daysBetween } from "@/lib/utils";
+import { getConfig } from "@/lib/config";
 
 const LINEAR_API = "https://api.linear.app/graphql";
 
@@ -8,7 +9,7 @@ async function linearQuery<T>(query: string, variables?: Record<string, unknown>
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: process.env.LINEAR_API_KEY!,
+      Authorization: getConfig("LINEAR_API_KEY")!,
     },
     body: JSON.stringify({ query, variables }),
   });
