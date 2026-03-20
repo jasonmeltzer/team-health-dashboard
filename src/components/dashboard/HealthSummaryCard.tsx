@@ -33,7 +33,7 @@ function ScoreInfo() {
         ?
       </button>
       {open && (
-        <div className="absolute left-0 top-6 z-50 w-72 rounded-lg border border-zinc-200 bg-white p-3 text-xs text-zinc-600 shadow-lg dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+        <div className="absolute left-0 top-6 z-50 w-80 rounded-lg border border-zinc-200 bg-white p-3 text-xs text-zinc-600 shadow-lg dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
           <p className="mb-2 font-medium text-zinc-700 dark:text-zinc-300">
             How the score works
           </p>
@@ -42,10 +42,33 @@ function ScoreInfo() {
             across your connected integrations. It&apos;s deterministic — same data
             always produces the same score.
           </p>
+
+          <p className="mb-1.5 font-medium text-zinc-500">Signals checked:</p>
+          <div className="mb-2 space-y-1.5">
+            <div>
+              <p className="font-medium text-zinc-700 dark:text-zinc-300">GitHub (up to 30 pts)</p>
+              <p>Avg cycle time, stale PRs, review queue backup, cycle time trend</p>
+            </div>
+            <div>
+              <p className="font-medium text-zinc-700 dark:text-zinc-300">Linear (up to 30 pts)</p>
+              <p>Stalled issues, workload imbalance, velocity trend, flow efficiency, WIP per person, long-running items</p>
+            </div>
+            <div>
+              <p className="font-medium text-zinc-700 dark:text-zinc-300">Slack (up to 20 pts)</p>
+              <p>Response time, overloaded members, response time trend</p>
+            </div>
+          </div>
+
+          <p className="mb-2 text-zinc-400">
+            Only connected integrations are scored. Missing sources don&apos;t
+            penalize you — the score rescales to what&apos;s available.
+          </p>
+
           <p className="mb-2">
             Click the score circle to see exactly which signals contributed.
           </p>
-          <div className="space-y-0.5">
+
+          <div className="space-y-0.5 border-t border-zinc-100 pt-2 dark:border-zinc-700">
             <p>
               <span className="font-medium text-emerald-600">80-100 Healthy</span>{" "}
               — smooth flow, no major blockers
