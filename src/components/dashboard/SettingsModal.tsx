@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 interface ConfigStatus {
@@ -175,9 +175,29 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                 description="Connect to GitHub to track PR metrics, cycle time, and review bottlenecks."
                 configured={status?.github}
                 fields={[
-                  { label: "Personal Access Token", placeholder: "ghp_...", value: github.token, onChange: (v) => setGithub((s) => ({ ...s, token: v })), type: "password", hint: "Needs 'repo' scope" },
-                  { label: "Organization", placeholder: "your-org", value: github.org, onChange: (v) => setGithub((s) => ({ ...s, org: v })) },
-                  { label: "Repository", placeholder: "your-repo", value: github.repo, onChange: (v) => setGithub((s) => ({ ...s, repo: v })) },
+                  {
+                    label: "Personal Access Token",
+                    placeholder: "ghp_...",
+                    value: github.token,
+                    onChange: (v) => setGithub((s) => ({ ...s, token: v })),
+                    type: "password",
+                    hint: "Needs 'repo' scope",
+                    help: "1. Go to github.com > Settings > Developer settings > Personal access tokens > Tokens (classic)\n2. Click \"Generate new token (classic)\"\n3. Give it a name (e.g. \"Team Health Dashboard\")\n4. Under scopes, check \"repo\" (full control of private repositories)\n5. Click \"Generate token\" and copy the token (starts with ghp_)",
+                  },
+                  {
+                    label: "Organization",
+                    placeholder: "your-org",
+                    value: github.org,
+                    onChange: (v) => setGithub((s) => ({ ...s, org: v })),
+                    help: "The GitHub organization or user that owns the repository. This is the first part of the repo URL: github.com/{org}/{repo}",
+                  },
+                  {
+                    label: "Repository",
+                    placeholder: "your-repo",
+                    value: github.repo,
+                    onChange: (v) => setGithub((s) => ({ ...s, repo: v })),
+                    help: "The repository name to track. This is the second part of the repo URL: github.com/{org}/{repo}",
+                  },
                 ]}
                 onSave={saveGithub}
                 saving={saving}
@@ -190,8 +210,22 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                 description="Connect to Linear to track sprint velocity, workload distribution, and time-in-state."
                 configured={status?.linear}
                 fields={[
-                  { label: "API Key", placeholder: "lin_api_...", value: linear.apiKey, onChange: (v) => setLinear((s) => ({ ...s, apiKey: v })), type: "password", hint: "Settings > API > Personal API keys" },
-                  { label: "Team ID", placeholder: "e.g. abc123", value: linear.teamId, onChange: (v) => setLinear((s) => ({ ...s, teamId: v })) },
+                  {
+                    label: "API Key",
+                    placeholder: "lin_api_...",
+                    value: linear.apiKey,
+                    onChange: (v) => setLinear((s) => ({ ...s, apiKey: v })),
+                    type: "password",
+                    hint: "Settings > API > Personal API keys",
+                    help: "1. Open Linear and click your avatar (bottom-left)\n2. Go to Settings > API\n3. Under \"Personal API keys\", click \"Create key\"\n4. Give it a label and click \"Create\"\n5. Copy the key (starts with lin_api_)",
+                  },
+                  {
+                    label: "Team ID",
+                    placeholder: "e.g. abc123",
+                    value: linear.teamId,
+                    onChange: (v) => setLinear((s) => ({ ...s, teamId: v })),
+                    help: "1. Open Linear and go to Settings > Teams\n2. Click on the team you want to track\n3. The team ID is in the URL: linear.app/settings/teams/{teamId}\n\nAlternatively, use the Linear API: run a GraphQL query for { teams { nodes { id name } } }",
+                  },
                 ]}
                 onSave={saveLinear}
                 saving={saving}
@@ -204,8 +238,23 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                 description="Connect to Slack to track response times, channel activity, and team overload signals."
                 configured={status?.slack}
                 fields={[
-                  { label: "Bot OAuth Token", placeholder: "xoxb-...", value: slack.botToken, onChange: (v) => setSlack((s) => ({ ...s, botToken: v })), type: "password", hint: "Needs channels:history, channels:read, users:read" },
-                  { label: "Channel IDs", placeholder: "C01ABC, C02DEF", value: slack.channelIds, onChange: (v) => setSlack((s) => ({ ...s, channelIds: v })), hint: "Comma-separated. Right-click channel > View details > copy ID" },
+                  {
+                    label: "Bot OAuth Token",
+                    placeholder: "xoxb-...",
+                    value: slack.botToken,
+                    onChange: (v) => setSlack((s) => ({ ...s, botToken: v })),
+                    type: "password",
+                    hint: "Needs channels:history, channels:read, users:read",
+                    help: "1. Go to api.slack.com/apps and click \"Create New App\" > \"From scratch\"\n2. Name it (e.g. \"Team Health\") and pick your workspace\n3. Go to OAuth & Permissions in the sidebar\n4. Under \"Bot Token Scopes\", add: channels:history, channels:read, users:read\n5. Click \"Install to Workspace\" at the top and authorize\n6. Copy the \"Bot User OAuth Token\" (starts with xoxb-)\n7. Invite the bot to each channel you want to monitor: /invite @Team Health",
+                  },
+                  {
+                    label: "Channel IDs",
+                    placeholder: "C01ABC, C02DEF",
+                    value: slack.channelIds,
+                    onChange: (v) => setSlack((s) => ({ ...s, channelIds: v })),
+                    hint: "Comma-separated",
+                    help: "To find a channel ID:\n1. Open Slack and right-click on the channel name\n2. Click \"View channel details\" (or \"Copy link\")\n3. The channel ID is at the bottom of the details panel, or the last segment of the copied link\n\nIt looks like C01ABC2DEF3. Add multiple IDs separated by commas.",
+                  },
                 ]}
                 onSave={saveSlack}
                 saving={saving}
@@ -257,6 +306,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                     value={ai.anthropicKey}
                     onChange={(v) => setAi((s) => ({ ...s, anthropicKey: v }))}
                     type="password"
+                    help={"1. Go to console.anthropic.com and sign in (or create an account)\n2. Click \"API Keys\" in the left sidebar\n3. Click \"Create Key\", give it a name\n4. Copy the key (starts with sk-ant-)\n\nNote: Anthropic API usage requires a paid account with credits."}
                   />
                 )}
 
@@ -268,6 +318,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                       value={ai.ollamaUrl}
                       onChange={(v) => setAi((s) => ({ ...s, ollamaUrl: v }))}
                       hint="Leave blank for default (localhost:11434)"
+                      help="The URL where your Ollama server is running. If you installed Ollama on this machine, the default (localhost:11434) should work.\n\nIf Ollama is running on another machine on your network, use that machine's IP address (e.g. http://192.168.1.100:11434)."
                     />
                     <Field
                       label="Model"
@@ -275,6 +326,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                       value={ai.ollamaModel}
                       onChange={(v) => setAi((s) => ({ ...s, ollamaModel: v }))}
                       hint="Run 'ollama pull llama3' to download"
+                      help={"To set up Ollama:\n1. Install from ollama.com (macOS, Linux, or Windows)\n2. Open a terminal and run: ollama pull llama3\n3. Wait for the download to complete (~4GB)\n\nOther good models to try:\n- llama3 (default, good all-around)\n- mistral (fast, good for structured output)\n- llama3:70b (higher quality, needs more RAM)"}
                     />
                   </>
                 )}
@@ -295,6 +347,43 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
   );
 }
 
+function HelpPopover({ content }: { content: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  return (
+    <span className="relative inline-block" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-bold leading-none text-zinc-500 hover:bg-zinc-300 hover:text-zinc-700 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600 dark:hover:text-zinc-200"
+      >
+        ?
+      </button>
+      {open && (
+        <div className="absolute left-0 top-6 z-10 w-72 rounded-lg border border-zinc-200 bg-white p-3 text-xs leading-relaxed text-zinc-600 shadow-lg dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+          {content.split("\n").map((line, i) => (
+            <p key={i} className={line === "" ? "mt-2" : undefined}>
+              {line}
+            </p>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
 function Field({
   label,
   placeholder,
@@ -302,6 +391,7 @@ function Field({
   onChange,
   type = "text",
   hint,
+  help,
 }: {
   label: string;
   placeholder: string;
@@ -309,11 +399,13 @@ function Field({
   onChange: (v: string) => void;
   type?: string;
   hint?: string;
+  help?: string;
 }) {
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+      <label className="mb-1 flex items-center text-xs font-medium text-zinc-700 dark:text-zinc-300">
         {label}
+        {help && <HelpPopover content={help} />}
       </label>
       <input
         type={type}
@@ -338,7 +430,7 @@ function SectionForm({
   title: string;
   description: string;
   configured?: boolean;
-  fields: { label: string; placeholder: string; value: string; onChange: (v: string) => void; type?: string; hint?: string }[];
+  fields: { label: string; placeholder: string; value: string; onChange: (v: string) => void; type?: string; hint?: string; help?: string }[];
   onSave: () => void;
   saving: boolean;
 }) {
