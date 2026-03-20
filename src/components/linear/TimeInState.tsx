@@ -153,7 +153,7 @@ function SummaryTab({ stats }: { stats: TimeInStateStats[] }) {
       {/* Chart */}
       {stats.length > 0 && (
         <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <BarChart data={stats}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
               <XAxis dataKey="state" tick={{ fontSize: 12 }} stroke="#a1a1aa" />
@@ -675,7 +675,7 @@ function TrendsTab({ data }: { data: TimeInStateData }) {
         Lower is better.
       </p>
       <div className="h-48">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <LineChart data={data.leadTimeTrend}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
             <XAxis dataKey="week" tick={{ fontSize: 12 }} stroke="#a1a1aa" />

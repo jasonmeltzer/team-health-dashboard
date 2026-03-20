@@ -29,7 +29,7 @@ export function ReviewBottlenecks({ data }: { data: ReviewBottleneck[] }) {
   return (
     <div className="space-y-3">
       <div style={{ height: chartHeight }}>
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <BarChart
             data={data}
             layout="vertical"
