@@ -6,6 +6,22 @@ import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 
+/** Strip markdown artifacts that local LLMs add despite instructions not to. */
+function cleanNarrative(raw: string): string[] {
+  return raw
+    .split(/\n\n+/)
+    .map((p) =>
+      p
+        .replace(/\*\*([^*]+)\*\*/g, "$1")   // **bold** → bold
+        .replace(/^#+\s*/gm, "")              // ### headers → plain
+        .replace(/^\s*[-*]\s+/gm, "")         // bullet points → plain
+        .replace(/^\s*\d+\.\s+/gm, "")        // numbered lists → plain
+        .replace(/\n/g, " ")                   // join wrapped lines
+        .trim()
+    )
+    .filter((p) => p.length > 0);
+}
+
 export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
   const { data, loading, error, notConfigured, setupHint, refetch } = useApiData<WeeklyNarrative>(
     "/api/weekly-narrative",
@@ -62,7 +78,7 @@ export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
         <span className="text-xs text-zinc-500">Week of {data.weekOf}</span>
       </div>
       <div className="prose prose-sm prose-zinc max-w-none dark:prose-invert">
-        {data.narrative.split("\n\n").map((paragraph, i) => (
+        {cleanNarrative(data.narrative).map((paragraph, i) => (
           <p key={i}>{paragraph}</p>
         ))}
       </div>

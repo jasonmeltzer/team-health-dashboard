@@ -14,6 +14,20 @@ export class OllamaNotRunningError extends Error {
   }
 }
 
+/** Extract JSON from LLM responses that may wrap it in markdown code fences or add preamble text. */
+function extractJSON(text: string): string {
+  // Try to find JSON inside ```json ... ``` or ``` ... ``` fences
+  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (fenceMatch) return fenceMatch[1].trim();
+
+  // Try to find a JSON object directly
+  const braceMatch = text.match(/\{[\s\S]*\}/);
+  if (braceMatch) return braceMatch[0];
+
+  // Return as-is and let JSON.parse throw
+  return text;
+}
+
 type AIProvider = "anthropic" | "ollama";
 
 function getProvider(): AIProvider {
@@ -89,20 +103,21 @@ export async function generateHealthSummary(
   linear: LinearMetrics,
   slack: SlackMetrics
 ): Promise<HealthSummary> {
-  const system = `You are an engineering team health analyst. Analyze the provided metrics and return ONLY a JSON object (no markdown, no code fences) with this exact shape:
-{
-  "overallHealth": "healthy" | "warning" | "critical",
-  "score": <number 0-100>,
-  "insights": [<3-5 short bullet strings>],
-  "recommendations": [<2-3 actionable strings>]
-}
+  const system = `You are an engineering team health analyst. Analyze the provided metrics and return ONLY a JSON object with this exact shape:
+
+{"overallHealth":"healthy","score":85,"insights":["insight1","insight2","insight3"],"recommendations":["rec1","rec2"]}
+
+Rules:
+- Return ONLY the JSON object. No markdown, no code fences, no explanation before or after.
+- overallHealth: "healthy" (score 80-100), "warning" (50-79), or "critical" (0-49)
+- insights: 3-5 strings. Each must cite a specific number from the data. No generic statements.
+- recommendations: 2-3 actionable strings. Be specific about what to do.
+- If a data source has zeros or empty arrays, ignore it — don't mention missing data.
 
 Scoring guide:
 - 80-100 = healthy: Low cycle times, good velocity, no major bottlenecks
 - 50-79 = warning: Some bottlenecks, stalled work, or overload signals
-- 0-49 = critical: Significant blockers, high cycle times, or severe overload
-
-Be specific. Cite numbers from the data. Focus on actionable intelligence.`;
+- 0-49 = critical: Significant blockers, high cycle times, or severe overload`;
 
   const userMessage = `Analyze these engineering team metrics from the past week:
 
@@ -130,7 +145,7 @@ Slack Communication Metrics:
   const text = await chatCompletion(system, userMessage, 1024);
 
   try {
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(extractJSON(text));
     return {
       overallHealth: parsed.overallHealth,
       score: parsed.score,
@@ -157,7 +172,14 @@ export async function generateWeeklyNarrative(
   const weekOf = new Date();
   weekOf.setDate(weekOf.getDate() - weekOf.getDay()); // Start of week
 
-  const system = `You are an engineering team health analyst writing a weekly team health narrative. Write a concise, actionable summary in 3-4 short paragraphs. Use plain text, no markdown headers. Be direct and specific — cite numbers, name patterns, and call out risks. The tone should be like a sharp engineering manager's weekly update.`;
+  const system = `You are an engineering team health analyst writing a weekly team health narrative.
+
+Rules:
+- Write 3-4 short paragraphs of plain text. NO markdown, NO headers, NO bold, NO bullet points, NO numbered lists.
+- Be direct and specific — cite actual numbers from the data. Name specific people, PRs, or issues when relevant.
+- Focus on what changed, what's at risk, and what to do about it. Skip generic advice.
+- The tone should be like a sharp engineering manager's weekly update to their skip-level.
+- If a data source has no meaningful data (zeros, empty arrays), skip it — don't mention it.`;
 
   const userMessage = `Write a weekly team health narrative based on these metrics:
 
