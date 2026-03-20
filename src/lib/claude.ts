@@ -145,20 +145,23 @@ Slack Communication Metrics:
   const text = await chatCompletion(system, userMessage, 1024);
 
   try {
-    const parsed = JSON.parse(extractJSON(text));
+    const json = extractJSON(text);
+    const parsed = JSON.parse(json);
     return {
-      overallHealth: parsed.overallHealth,
-      score: parsed.score,
-      insights: parsed.insights,
-      recommendations: parsed.recommendations,
+      overallHealth: parsed.overallHealth || "warning",
+      score: typeof parsed.score === "number" ? parsed.score : 50,
+      insights: Array.isArray(parsed.insights) ? parsed.insights : [],
+      recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
       generatedAt: new Date().toISOString(),
     };
-  } catch {
+  } catch (err) {
+    console.error("[health-summary] Failed to parse AI response:", err);
+    console.error("[health-summary] Raw text:", text.slice(0, 500));
     return {
       overallHealth: "warning",
       score: 50,
-      insights: ["Unable to parse AI analysis. Raw response available."],
-      recommendations: ["Check API configuration and retry."],
+      insights: ["AI analysis could not be parsed. Try refreshing, or try a different model (e.g. llama3.1 or mistral)."],
+      recommendations: ["Run 'ollama list' to check available models.", "Larger models (8B+) handle structured JSON output more reliably."],
       generatedAt: new Date().toISOString(),
     };
   }
