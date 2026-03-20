@@ -396,7 +396,7 @@ function buildLeadTimeTrend(issues: LinearIssue[]): LeadTimeTrendPoint[] {
 function buildWorkload(issues: LinearIssue[]): WorkloadEntry[] {
   const assigneeMap = new Map<
     string,
-    { avatarUrl: string | null; inProgress: number; todo: number; completed: number; totalPoints: number }
+    { avatarUrl: string | null; inProgress: number; todo: number; completed: number; totalPoints: number; issues: { identifier: string; title: string; state: string; stateType: string; estimate: number | null; url: string }[] }
   >();
 
   for (const issue of issues) {
@@ -407,6 +407,7 @@ function buildWorkload(issues: LinearIssue[]): WorkloadEntry[] {
       todo: 0,
       completed: 0,
       totalPoints: 0,
+      issues: [],
     };
 
     if (issue.state.type === "completed") entry.completed += 1;
@@ -414,6 +415,14 @@ function buildWorkload(issues: LinearIssue[]): WorkloadEntry[] {
     else if (issue.state.type === "unstarted") entry.todo += 1;
 
     entry.totalPoints += issue.estimate || 0;
+    entry.issues.push({
+      identifier: issue.identifier,
+      title: issue.title,
+      state: issue.state.name,
+      stateType: issue.state.type,
+      estimate: issue.estimate,
+      url: issue.url,
+    });
     assigneeMap.set(name, entry);
   }
 

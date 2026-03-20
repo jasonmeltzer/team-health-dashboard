@@ -125,7 +125,9 @@ export function TimeInState({ data }: { data: TimeInStateData }) {
       </div>
 
       {/* Tab content */}
-      {activeTab === "summary" && <SummaryTab stats={filteredStats} />}
+      {activeTab === "summary" && (
+        <SummaryTab stats={filteredStats} issues={data.issues} />
+      )}
       {activeTab === "wip" && <WipTab issues={data.issues} />}
       {activeTab === "outliers" && (
         <OutliersTab issues={data.issues} stats={filteredStats} />
@@ -147,7 +149,22 @@ export function TimeInState({ data }: { data: TimeInStateData }) {
 
 /* ────────────────────────────────── Summary Tab ────────────────────────────────── */
 
-function SummaryTab({ stats }: { stats: TimeInStateStats[] }) {
+function SummaryTab({
+  stats,
+  issues,
+}: {
+  stats: TimeInStateStats[];
+  issues: TimeInStateIssue[];
+}) {
+  const [expandedState, setExpandedState] = useState<string | null>(null);
+
+  const expandedIssues = useMemo(() => {
+    if (!expandedState) return [];
+    return issues
+      .filter((i) => i.state === expandedState)
+      .sort((a, b) => b.daysInState - a.daysInState);
+  }, [issues, expandedState]);
+
   return (
     <div className="space-y-4">
       {/* Chart */}
@@ -207,7 +224,17 @@ function SummaryTab({ stats }: { stats: TimeInStateStats[] }) {
             {stats.map((row) => (
               <tr
                 key={row.state}
-                className="border-b border-zinc-100 dark:border-zinc-800"
+                onClick={() =>
+                  setExpandedState((prev) =>
+                    prev === row.state ? null : row.state
+                  )
+                }
+                className={cn(
+                  "border-b border-zinc-100 cursor-pointer transition-colors dark:border-zinc-800",
+                  expandedState === row.state
+                    ? "bg-zinc-50 dark:bg-zinc-800/50"
+                    : "hover:bg-zinc-50 dark:hover:bg-zinc-800/30"
+                )}
               >
                 <td className="py-2 font-medium text-zinc-700 dark:text-zinc-300">
                   <span className="flex items-center gap-2">
@@ -241,6 +268,19 @@ function SummaryTab({ stats }: { stats: TimeInStateStats[] }) {
           </tbody>
         </table>
       </div>
+
+      {/* Expanded issue list */}
+      {expandedState && expandedIssues.length > 0 && (
+        <IssueList
+          label={expandedState}
+          issues={expandedIssues}
+          onClose={() => setExpandedState(null)}
+        />
+      )}
+
+      <p className="text-xs text-zinc-400">
+        Click a row to see the issues in that state.
+      </p>
 
       {/* Explanation of what "days" means */}
       <p className="text-xs leading-relaxed text-zinc-400">
@@ -438,6 +478,11 @@ function AssigneeTab({
   issues: TimeInStateIssue[];
   hiddenStates: Set<string>;
 }) {
+  const [expandedCell, setExpandedCell] = useState<{
+    assignee: string;
+    state: string;
+  } | null>(null);
+
   const { assignees, states, matrix } = useMemo(() => {
     const filtered = issues.filter((i) => !hiddenStates.has(i.state));
     const map = new Map<string, Map<string, { count: number; totalDays: number }>>();
@@ -459,6 +504,17 @@ function AssigneeTab({
     return { assignees, states, matrix: map };
   }, [issues, hiddenStates]);
 
+  const expandedIssues = useMemo(() => {
+    if (!expandedCell) return [];
+    return issues
+      .filter(
+        (i) =>
+          (i.assignee || "Unassigned") === expandedCell.assignee &&
+          i.state === expandedCell.state
+      )
+      .sort((a, b) => b.daysInState - a.daysInState);
+  }, [issues, expandedCell]);
+
   if (assignees.length === 0) {
     return (
       <p className="py-6 text-center text-sm text-zinc-500">No assignee data</p>
@@ -477,7 +533,7 @@ function AssigneeTab({
   return (
     <div className="space-y-3">
       <p className="text-xs text-zinc-500">
-        Average days in state per assignee. Darker cells = longer time.
+        Average days in state per assignee. Darker cells = longer time. Click a cell to see issues.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -517,10 +573,21 @@ function AssigneeTab({
                   }
                   const mean = Math.round((entry.totalDays / entry.count) * 10) / 10;
                   const intensity = maxMean > 0 ? mean / maxMean : 0;
+                  const isExpanded =
+                    expandedCell?.assignee === assignee &&
+                    expandedCell?.state === state;
                   return (
                     <td
                       key={state}
-                      className="py-2 text-center"
+                      onClick={() =>
+                        setExpandedCell(
+                          isExpanded ? null : { assignee, state }
+                        )
+                      }
+                      className={cn(
+                        "py-2 text-center cursor-pointer transition-opacity",
+                        isExpanded && "ring-2 ring-zinc-400 ring-inset rounded"
+                      )}
                       style={{
                         backgroundColor: `rgba(245, 158, 11, ${intensity * 0.3})`,
                       }}
@@ -539,6 +606,15 @@ function AssigneeTab({
           </tbody>
         </table>
       </div>
+
+      {/* Expanded issue list for selected cell */}
+      {expandedCell && expandedIssues.length > 0 && (
+        <IssueList
+          label={`${expandedCell.assignee} — ${expandedCell.state}`}
+          issues={expandedIssues}
+          onClose={() => setExpandedCell(null)}
+        />
+      )}
     </div>
   );
 }
@@ -743,6 +819,67 @@ function TrendsTab({ data }: { data: TimeInStateData }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────── Shared Issue List ────────────────────────────────── */
+
+function IssueList({
+  label,
+  issues,
+  onClose,
+}: {
+  label: string;
+  issues: TimeInStateIssue[];
+  onClose: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          {label}{" "}
+          <span className="font-normal text-zinc-400">
+            — {issues.length} issue{issues.length !== 1 ? "s" : ""}
+          </span>
+        </span>
+        <button
+          onClick={onClose}
+          className="text-xs text-zinc-400 hover:text-zinc-600"
+        >
+          close
+        </button>
+      </div>
+      <table className="w-full text-sm">
+        <tbody>
+          {issues.map((issue) => (
+            <tr
+              key={issue.identifier}
+              className="border-b border-zinc-100 last:border-0 dark:border-zinc-700"
+            >
+              <td className="py-1.5 text-zinc-700 dark:text-zinc-300">
+                <a
+                  href={issue.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                >
+                  <span className="font-mono text-xs text-zinc-400">
+                    {issue.identifier}
+                  </span>{" "}
+                  {issue.title}
+                </a>
+              </td>
+              <td className="py-1.5 text-right text-xs text-zinc-500 whitespace-nowrap">
+                {issue.assignee || "Unassigned"}
+              </td>
+              <td className="py-1.5 pl-3 text-right font-mono text-xs font-medium text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                {issue.daysInState}d
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

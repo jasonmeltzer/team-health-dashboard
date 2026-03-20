@@ -140,7 +140,7 @@ function mergeWorkloads(
 ): WorkloadEntry[] {
   const merged = new Map<
     string,
-    { avatarUrl: string | null; inProgress: number; todo: number; completed: number; totalPoints: number }
+    { avatarUrl: string | null; inProgress: number; todo: number; completed: number; totalPoints: number; issues: WorkloadEntry["issues"] }
   >();
 
   for (const cycleName of selectedCycles) {
@@ -153,11 +153,13 @@ function mergeWorkloads(
         todo: 0,
         completed: 0,
         totalPoints: 0,
+        issues: [],
       };
       existing.inProgress += entry.inProgress;
       existing.todo += entry.todo;
       existing.completed += entry.completed;
       existing.totalPoints += entry.totalPoints;
+      existing.issues.push(...entry.issues);
       merged.set(entry.assignee, existing);
     }
   }

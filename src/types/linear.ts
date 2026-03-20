@@ -16,6 +16,15 @@ export interface StalledIssue {
   url: string;
 }
 
+export interface WorkloadIssue {
+  identifier: string;
+  title: string;
+  state: string;
+  stateType: string;
+  estimate: number | null;
+  url: string;
+}
+
 export interface WorkloadEntry {
   assignee: string;
   avatarUrl: string | null;
@@ -23,6 +32,7 @@ export interface WorkloadEntry {
   todo: number;
   completed: number;
   totalPoints: number;
+  issues: WorkloadIssue[];
 }
 
 export interface TimeInStateStats {
