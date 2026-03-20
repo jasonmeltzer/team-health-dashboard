@@ -45,9 +45,11 @@ export function isAIConfigured(): boolean {
 async function chatCompletion(
   system: string,
   userMessage: string,
-  maxTokens: number
+  maxTokens: number,
+  options?: { temperature?: number; jsonMode?: boolean }
 ): Promise<string> {
   const provider = getProvider();
+  const temperature = options?.temperature ?? 0.3;
 
   if (provider === "anthropic") {
     const client = new Anthropic({ apiKey: getConfig("ANTHROPIC_API_KEY") });
@@ -56,6 +58,7 @@ async function chatCompletion(
       max_tokens: maxTokens,
       system,
       messages: [{ role: "user", content: userMessage }],
+      temperature,
     });
     return message.content[0].type === "text" ? message.content[0].text : "";
   }
@@ -64,20 +67,27 @@ async function chatCompletion(
   const baseUrl = getConfig("OLLAMA_BASE_URL") || "http://localhost:11434";
   const model = getConfig("OLLAMA_MODEL") || "llama3";
 
+  const body: Record<string, unknown> = {
+    model,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: userMessage },
+    ],
+    max_tokens: maxTokens,
+    temperature,
+  };
+
+  // Force JSON output when supported (Ollama OpenAI-compatible API)
+  if (options?.jsonMode) {
+    body.response_format = { type: "json_object" };
+  }
+
   let response: Response;
   try {
     response = await fetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: userMessage },
-        ],
-        max_tokens: maxTokens,
-        temperature: 0.3,
-      }),
+      body: JSON.stringify(body),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -103,21 +113,23 @@ export async function generateHealthSummary(
   linear: LinearMetrics | null,
   slack: SlackMetrics | null
 ): Promise<HealthSummary> {
+  const ALL_SOURCES = ["GitHub", "Linear", "Slack"];
   const sources: string[] = [];
   if (github) sources.push("GitHub");
   if (linear) sources.push("Linear");
   if (slack) sources.push("Slack");
+  const notConnected = ALL_SOURCES.filter((s) => !sources.includes(s));
 
-  const system = `You are an engineering team health analyst. Analyze the provided metrics and return ONLY a JSON object with this exact shape:
+  const system = `You are an engineering team health analyst. Analyze the provided metrics and return a JSON object with this exact shape:
 
 {"overallHealth":"healthy","score":85,"insights":["insight1","insight2","insight3"],"recommendations":["rec1","rec2"]}
 
 Rules:
-- Return ONLY the JSON object. No markdown, no code fences, no explanation before or after.
+- Return ONLY valid JSON. No markdown, no code fences, no explanation before or after.
 - overallHealth: "healthy" (score 80-100), "warning" (50-79), or "critical" (0-49)
 - insights: 3-5 strings. Each must cite a specific number from the data. No generic statements.
 - recommendations: 2-3 actionable strings. Be specific about what to do.
-- ONLY analyze the data sources provided (${sources.join(", ")}). Do NOT mention or speculate about missing sources.
+- Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}. Do not reference, speculate about, or suggest configuring these.` : ""}
 
 Scoring guide:
 - 80-100 = healthy: Low cycle times, good velocity, no major bottlenecks
@@ -155,7 +167,10 @@ Scoring guide:
 
   const userMessage = `Analyze these engineering team metrics from the past week:\n\n${sections.join("\n\n")}`;
 
-  const text = await chatCompletion(system, userMessage, 1024);
+  const text = await chatCompletion(system, userMessage, 1024, {
+    temperature: 0,
+    jsonMode: true,
+  });
 
   try {
     const json = extractJSON(text);
@@ -188,10 +203,12 @@ export async function generateWeeklyNarrative(
   const weekOf = new Date();
   weekOf.setDate(weekOf.getDate() - weekOf.getDay()); // Start of week
 
+  const ALL_SOURCES = ["GitHub", "Linear", "Slack"];
   const sources: string[] = [];
   if (github) sources.push("GitHub");
   if (linear) sources.push("Linear");
   if (slack) sources.push("Slack");
+  const notConnected = ALL_SOURCES.filter((s) => !sources.includes(s));
 
   const system = `You are an engineering team health analyst writing a weekly team health narrative.
 
@@ -200,7 +217,7 @@ Rules:
 - Be direct and specific — cite actual numbers from the data. Name specific people, PRs, or issues when relevant.
 - Focus on what changed, what's at risk, and what to do about it. Skip generic advice.
 - The tone should be like a sharp engineering manager's weekly update to their skip-level.
-- ONLY discuss the data sources provided (${sources.join(", ")}). Do NOT mention or speculate about missing sources.`;
+- Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}. Do not reference, speculate about, or suggest configuring these.` : ""}`;
 
   const sections: string[] = [];
 
