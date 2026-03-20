@@ -140,6 +140,9 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
           label="Stale PRs"
           value={data.summary.stalePRCount}
           trend={data.summary.stalePRCount > 3 ? "up" : "flat"}
+          onClick={() => {
+            document.getElementById("stale-prs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
         />
         <MetricCard
           label="Needs Review"
@@ -165,7 +168,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
           <ReviewBottlenecks data={data.reviewBottlenecks} />
         </Card>
         <Card>
-          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <h3 id="stale-prs" className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Stale PRs
           </h3>
           <StalePRsList data={data.stalePRs} />

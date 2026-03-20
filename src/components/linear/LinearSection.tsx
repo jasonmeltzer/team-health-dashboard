@@ -265,6 +265,9 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
           label="Stalled Issues"
           value={data.summary.stalledIssueCount}
           trend={data.summary.stalledIssueCount > 3 ? "up" : "flat"}
+          onClick={() => {
+            document.getElementById("stalled-issues")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
         />
         <MetricCard
           label={isCycles ? "Avg Velocity" : "Avg Throughput"}
@@ -301,7 +304,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
           </Card>
         )}
         <Card>
-          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <h3 id="stalled-issues" className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Stalled Issues
           </h3>
           <StalledIssuesList data={data.stalledIssues} />
