@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useApiData } from "@/hooks/useApiData";
 import type { LinearMetrics, WorkloadEntry, CycleInfo } from "@/types/linear";
 import { Card } from "@/components/ui/Card";
@@ -228,6 +228,10 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
     );
   }
 
+  // State for programmatically switching the TimeInState tab
+  const [requestedTab, setRequestedTab] = useState<"wip" | null>(null);
+  const clearRequestedTab = useCallback(() => setRequestedTab(null), []);
+
   if (!data) return null;
 
   const isCycles = data.mode === "cycles";
@@ -251,6 +255,10 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
           <MetricCard
             label="Active Issues"
             value={data.summary.totalActiveIssues}
+            onClick={() => {
+              setRequestedTab("wip");
+              document.getElementById("time-in-state")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
           />
         )}
         <MetricCard
@@ -272,7 +280,13 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
       </Card>
 
       <Card>
-        <TimeInState data={data.timeInState} />
+        <div id="time-in-state">
+          <TimeInState
+            data={data.timeInState}
+            requestedTab={requestedTab}
+            onTabActivated={clearRequestedTab}
+          />
+        </div>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">

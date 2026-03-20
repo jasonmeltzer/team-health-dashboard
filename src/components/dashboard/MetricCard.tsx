@@ -6,15 +6,25 @@ export function MetricCard({
   value,
   trend,
   trendLabel,
+  onClick,
 }: {
   label: string;
   value: string | number;
   trend?: "up" | "down" | "flat";
   trendLabel?: string;
+  onClick?: () => void;
 }) {
   return (
-    <Card className="flex flex-col gap-1">
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">{label}</p>
+    <Card
+      className={cn("flex flex-col gap-1", onClick && "cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors")}
+      onClick={onClick}
+    >
+      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        {label}
+        {onClick && (
+          <span className="ml-1 text-xs text-zinc-400">↗</span>
+        )}
+      </p>
       <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
         {value}
       </p>

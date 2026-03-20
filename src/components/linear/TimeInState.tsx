@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -40,18 +40,34 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "trends", label: "Trends" },
 ];
 
-export function TimeInState({ data }: { data: TimeInStateData }) {
+export function TimeInState({
+  data,
+  requestedTab,
+  onTabActivated,
+}: {
+  data: TimeInStateData;
+  requestedTab?: Tab | null;
+  onTabActivated?: () => void;
+}) {
   const [activeTab, setActiveTab] = useState<Tab>("summary");
   const [hiddenStates, setHiddenStates] = useState<Set<string>>(() => {
-    // Hide "completed" states (e.g. Done) by default — their "days" metric
-    // (days since completed) is less actionable than active states
-    const completedStates = new Set(
+    // Only show "started" states (In Progress, In Review, etc.) by default —
+    // other states (Done, Todo, Backlog) are less actionable
+    const nonActiveStates = new Set(
       data.issues
-        .filter((i) => i.stateType === "completed")
+        .filter((i) => i.stateType !== "started")
         .map((i) => i.state)
     );
-    return completedStates;
+    return nonActiveStates;
   });
+
+  // Allow parent to programmatically switch tabs (e.g. from "Active Issues" card)
+  useEffect(() => {
+    if (requestedTab) {
+      setActiveTab(requestedTab);
+      onTabActivated?.();
+    }
+  }, [requestedTab, onTabActivated]);
 
   if (data.stats.length === 0 && data.issues.length === 0) {
     return (
