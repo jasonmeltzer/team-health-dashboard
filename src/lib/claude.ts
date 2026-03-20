@@ -258,9 +258,45 @@ Overload indicators: ${JSON.stringify(slack.overloadIndicators, null, 2)}`);
 
   const text = await chatCompletion(system, userMessage, 2048);
 
+  // Strip any paragraphs/sentences that reference disconnected sources.
+  // Local models often hallucinate about sources they weren't given data for.
+  const cleaned = notConnected.length > 0
+    ? stripDisconnectedReferences(text, notConnected)
+    : text;
+
   return {
-    narrative: text,
+    narrative: cleaned,
     weekOf: weekOf.toISOString().split("T")[0],
     generatedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * Remove paragraphs that reference data sources we don't have.
+ * Splits on double-newline (paragraphs) and drops any that mention
+ * a disconnected source by name or by obvious keyword.
+ */
+function stripDisconnectedReferences(text: string, notConnected: string[]): string {
+  const keywords: Record<string, string[]> = {
+    Slack: ["slack", "communication", "response time", "messages", "overload", "chat"],
+    GitHub: ["github", "pull request", "PR", "merge", "cycle time", "review"],
+    Linear: ["linear", "sprint", "velocity", "cycle", "backlog", "stalled issue"],
+  };
+
+  const blocked = notConnected.flatMap(
+    (source) => keywords[source] || [source.toLowerCase()]
+  );
+
+  const paragraphs = text.split(/\n\n+/);
+  const filtered = paragraphs.filter((p) => {
+    const lower = p.toLowerCase();
+    return !blocked.some((kw) => lower.includes(kw.toLowerCase()));
+  });
+
+  // If we stripped everything, return a single paragraph noting limited data
+  if (filtered.length === 0) {
+    return "Limited data available. Connect more integrations for a richer narrative.";
+  }
+
+  return filtered.join("\n\n");
 }
