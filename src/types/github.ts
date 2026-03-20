@@ -5,10 +5,20 @@ export interface CycleTimeDataPoint {
   prsMerged: number;
 }
 
+export interface BottleneckPR {
+  number: number;
+  title: string;
+  author: string;
+  url: string;
+  hoursWaiting: number;
+}
+
 export interface ReviewBottleneck {
   reviewer: string;
   avatarUrl: string;
   pendingReviews: number;
+  pendingPRs: BottleneckPR[];
+  completedReviews: number;
   avgReviewTimeHours: number;
 }
 

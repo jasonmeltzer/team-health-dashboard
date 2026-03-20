@@ -37,8 +37,11 @@ export function StalledIssuesList({ data }: { data: StalledIssue[] }) {
               <p className="text-xs text-zinc-500">{issue.assignee}</p>
             )}
           </div>
-          <span className="ml-3 whitespace-nowrap text-sm font-medium text-amber-600 dark:text-amber-400">
-            {issue.daysSinceLastUpdate}d stalled
+          <span
+            className="ml-3 whitespace-nowrap text-sm font-medium text-amber-600 dark:text-amber-400"
+            title={`No updates for ${issue.daysSinceLastUpdate} days`}
+          >
+            {issue.daysSinceLastUpdate}d no update
           </span>
         </div>
       ))}

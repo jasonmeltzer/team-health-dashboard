@@ -1,13 +1,15 @@
 import { Octokit } from "octokit";
-import type { PRMetrics, CycleTimeDataPoint, ReviewBottleneck, StalePR } from "@/types/github";
+import type { PRMetrics, CycleTimeDataPoint, ReviewBottleneck, BottleneckPR, StalePR } from "@/types/github";
 import { getISOWeek, daysBetween, hoursBetween, daysAgo } from "@/lib/utils";
 
 export async function fetchGitHubMetrics(
   owner: string,
-  repo: string
+  repo: string,
+  staleDays: number = 7,
+  lookbackDays: number = 30
 ): Promise<PRMetrics> {
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-  const since = daysAgo(30).toISOString();
+  const since = daysAgo(lookbackDays).toISOString();
 
   // Fetch recent PRs — single page of 100 (sorted by updated desc),
   // which is enough for most repos' last 30 days
@@ -31,30 +33,38 @@ export async function fetchGitHubMetrics(
     { totalHours: number; count: number; reviewHours: number; reviewCount: number }
   >();
 
-  // Fetch first review for up to 20 merged PRs (to avoid rate limits)
-  const prsToFetchReviews = mergedPRs.slice(0, 20);
+  // Fetch reviews for up to 30 recent PRs (serves both cycle time + bottleneck analysis)
+  const prsForReviews = recentPulls.slice(0, 30);
   const reviewResults = await Promise.allSettled(
-    prsToFetchReviews.map((pr) =>
+    prsForReviews.map((pr) =>
       octokit.rest.pulls.listReviews({
         owner,
         repo,
         pull_number: pr.number,
-        per_page: 1,
+        per_page: 30,
       })
     )
   );
-  const reviewMap = new Map<number, string>();
-  prsToFetchReviews.forEach((pr, i) => {
+
+  // Map PR number -> all reviews
+  const prReviewsMap = new Map<
+    number,
+    { user: string; avatarUrl: string; submittedAt: string }[]
+  >();
+  prsForReviews.forEach((pr, i) => {
     const result = reviewResults[i];
-    if (
-      result.status === "fulfilled" &&
-      result.value.data.length > 0 &&
-      result.value.data[0].submitted_at
-    ) {
-      reviewMap.set(pr.number, result.value.data[0].submitted_at);
-    }
+    if (result.status !== "fulfilled") return;
+    const reviews = result.value.data
+      .filter((r) => r.user?.login && r.submitted_at)
+      .map((r) => ({
+        user: r.user!.login,
+        avatarUrl: r.user!.avatar_url || "",
+        submittedAt: r.submitted_at!,
+      }));
+    if (reviews.length > 0) prReviewsMap.set(pr.number, reviews);
   });
 
+  // Cycle time trend (using first review from prReviewsMap)
   for (const pr of mergedPRs) {
     const week = getISOWeek(new Date(pr.created_at));
     const cycleHours = hoursBetween(
@@ -71,11 +81,11 @@ export async function fetchGitHubMetrics(
     entry.totalHours += cycleHours;
     entry.count += 1;
 
-    const firstReviewAt = reviewMap.get(pr.number);
-    if (firstReviewAt) {
+    const reviews = prReviewsMap.get(pr.number);
+    if (reviews && reviews.length > 0) {
       const firstReviewHours = hoursBetween(
         new Date(pr.created_at),
-        new Date(firstReviewAt)
+        new Date(reviews[0].submittedAt)
       );
       entry.reviewHours += firstReviewHours;
       entry.reviewCount += 1;
@@ -96,25 +106,61 @@ export async function fetchGitHubMetrics(
       prsMerged: data.count,
     }));
 
-  // Review bottlenecks (open PRs with pending reviewers)
+  // Review bottlenecks — combines pending requests + completed review load
+  const now = new Date();
   const openPRs = recentPulls.filter((pr) => pr.state === "open");
+
   const reviewerMap = new Map<
     string,
-    { avatarUrl: string; pending: number; totalReviewHours: number; reviewCount: number }
+    {
+      avatarUrl: string;
+      pendingPRs: BottleneckPR[];
+      completedReviews: number;
+      totalReviewHours: number;
+    }
   >();
 
-  for (const pr of openPRs) {
-    const requestedReviewers = pr.requested_reviewers || [];
-    for (const reviewer of requestedReviewers) {
-      if (!reviewer || !("login" in reviewer)) continue;
-      const entry = reviewerMap.get(reviewer.login) || {
-        avatarUrl: reviewer.avatar_url || "",
-        pending: 0,
+  const getOrCreate = (login: string, avatarUrl: string) => {
+    if (!reviewerMap.has(login)) {
+      reviewerMap.set(login, {
+        avatarUrl,
+        pendingPRs: [],
+        completedReviews: 0,
         totalReviewHours: 0,
-        reviewCount: 0,
-      };
-      entry.pending += 1;
-      reviewerMap.set(reviewer.login, entry);
+      });
+    }
+    return reviewerMap.get(login)!;
+  };
+
+  // Pending review requests on open PRs
+  for (const pr of openPRs) {
+    for (const reviewer of pr.requested_reviewers || []) {
+      if (!reviewer || !("login" in reviewer)) continue;
+      const entry = getOrCreate(reviewer.login, reviewer.avatar_url || "");
+      entry.pendingPRs.push({
+        number: pr.number,
+        title: pr.title,
+        author: pr.user?.login || "unknown",
+        url: pr.html_url,
+        hoursWaiting: Math.round(hoursBetween(new Date(pr.created_at), now) * 10) / 10,
+      });
+    }
+  }
+
+  // Completed reviews from all fetched PRs
+  for (const [prNumber, reviews] of prReviewsMap) {
+    const pr = recentPulls.find((p) => p.number === prNumber);
+    if (!pr) continue;
+    const seen = new Set<string>();
+    for (const review of reviews) {
+      if (seen.has(review.user)) continue;
+      seen.add(review.user);
+      const entry = getOrCreate(review.user, review.avatarUrl);
+      entry.completedReviews += 1;
+      entry.totalReviewHours += hoursBetween(
+        new Date(pr.created_at),
+        new Date(review.submittedAt)
+      );
     }
   }
 
@@ -124,18 +170,19 @@ export async function fetchGitHubMetrics(
     .map(([reviewer, data]) => ({
       reviewer,
       avatarUrl: data.avatarUrl,
-      pendingReviews: data.pending,
+      pendingReviews: data.pendingPRs.length,
+      pendingPRs: data.pendingPRs.sort((a, b) => b.hoursWaiting - a.hoursWaiting),
+      completedReviews: data.completedReviews,
       avgReviewTimeHours:
-        data.reviewCount > 0
-          ? Math.round((data.totalReviewHours / data.reviewCount) * 10) / 10
+        data.completedReviews > 0
+          ? Math.round((data.totalReviewHours / data.completedReviews) * 10) / 10
           : 0,
     }))
-    .sort((a, b) => b.pendingReviews - a.pendingReviews);
+    .sort((a, b) => b.pendingReviews - a.pendingReviews || b.completedReviews - a.completedReviews);
 
-  // Stale PRs (open > 7 days without update)
-  const now = new Date();
+  // Stale PRs (open > N days without update)
   const stalePRs: StalePR[] = openPRs
-    .filter((pr) => daysBetween(new Date(pr.updated_at), now) > 7)
+    .filter((pr) => daysBetween(new Date(pr.updated_at), now) > staleDays)
     .map((pr) => ({
       number: pr.number,
       title: pr.title,

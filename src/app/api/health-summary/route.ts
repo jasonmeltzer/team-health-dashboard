@@ -52,6 +52,8 @@ export async function GET() {
       velocityTrend: [],
       stalledIssues: [],
       workloadDistribution: [],
+      availableCycles: [],
+      workloadByCycle: {},
       timeInState: { stats: [], issues: [], flowEfficiency: 0, leadTimeTrend: [] },
       summary: { currentCycleName: "N/A", currentCycleProgress: 0, totalActiveIssues: 0, stalledIssueCount: 0, avgVelocity: 0 },
     };

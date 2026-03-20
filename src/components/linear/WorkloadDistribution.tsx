@@ -42,6 +42,7 @@ export function WorkloadDistribution({ data }: { data: WorkloadEntry[] }) {
     assignee: shortenName(d.assignee),
   }));
 
+  const hasCompleted = data.some((d) => d.completed > 0);
   const chartHeight = Math.max(250, chartData.length * 40);
 
   return (
@@ -73,12 +74,14 @@ export function WorkloadDistribution({ data }: { data: WorkloadEntry[] }) {
             stackId="a"
           />
           <Bar dataKey="todo" name="To Do" fill="#94a3b8" stackId="a" />
-          <Bar
-            dataKey="completed"
-            name="Completed"
-            fill="#10b981"
-            stackId="a"
-          />
+          {hasCompleted && (
+            <Bar
+              dataKey="completed"
+              name="Completed"
+              fill="#10b981"
+              stackId="a"
+            />
+          )}
         </BarChart>
       </ResponsiveContainer>
     </div>

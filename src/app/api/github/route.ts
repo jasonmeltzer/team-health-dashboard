@@ -11,7 +11,11 @@ export async function GET(request: NextRequest) {
       return Response.json({ notConfigured: true });
     }
 
-    const metrics = await fetchGitHubMetrics(owner, repo);
+    const staleDaysParam = searchParams.get("staleDays");
+    const staleDays = staleDaysParam ? parseInt(staleDaysParam, 10) : 7;
+    const lookbackParam = searchParams.get("lookbackDays");
+    const lookbackDays = lookbackParam ? parseInt(lookbackParam, 10) : 30;
+    const metrics = await fetchGitHubMetrics(owner, repo, staleDays, lookbackDays);
     return Response.json({
       data: metrics,
       fetchedAt: new Date().toISOString(),

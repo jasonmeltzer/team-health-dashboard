@@ -58,11 +58,19 @@ export interface TimeInStateData {
   leadTimeTrend: LeadTimeTrendPoint[];
 }
 
+export interface CycleInfo {
+  id: string;
+  name: string;
+  isCurrent: boolean;
+}
+
 export interface LinearMetrics {
   mode: "cycles" | "continuous";
   velocityTrend: VelocityDataPoint[];
   stalledIssues: StalledIssue[];
   workloadDistribution: WorkloadEntry[];
+  availableCycles: CycleInfo[];
+  workloadByCycle: Record<string, WorkloadEntry[]>;
   timeInState: TimeInStateData;
   summary: {
     currentCycleName: string;

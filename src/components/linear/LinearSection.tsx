@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useApiData } from "@/hooks/useApiData";
-import type { LinearMetrics } from "@/types/linear";
+import type { LinearMetrics, WorkloadEntry, CycleInfo } from "@/types/linear";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -87,6 +87,86 @@ function RangeSlider({
   );
 }
 
+function CyclePicker({
+  cycles,
+  selected,
+  onChange,
+}: {
+  cycles: CycleInfo[];
+  selected: Set<string>;
+  onChange: (selected: Set<string>) => void;
+}) {
+  const toggle = (name: string) => {
+    const next = new Set(selected);
+    if (next.has(name)) {
+      if (next.size > 1) next.delete(name); // keep at least one selected
+    } else {
+      next.add(name);
+    }
+    onChange(next);
+  };
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {cycles.map((c) => {
+        const active = selected.has(c.name);
+        return (
+          <button
+            key={c.id}
+            onClick={() => toggle(c.name)}
+            className={cn(
+              "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+              active
+                ? "border-zinc-400 bg-zinc-900 text-white dark:border-zinc-500 dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-200 bg-zinc-50 text-zinc-400 hover:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500"
+            )}
+          >
+            {c.name}
+            {c.isCurrent && (
+              <span className={cn("ml-1", active ? "opacity-60" : "opacity-40")}>
+                (current)
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function mergeWorkloads(
+  workloadByCycle: Record<string, WorkloadEntry[]>,
+  selectedCycles: Set<string>
+): WorkloadEntry[] {
+  const merged = new Map<
+    string,
+    { avatarUrl: string | null; inProgress: number; todo: number; completed: number; totalPoints: number }
+  >();
+
+  for (const cycleName of selectedCycles) {
+    const entries = workloadByCycle[cycleName];
+    if (!entries) continue;
+    for (const entry of entries) {
+      const existing = merged.get(entry.assignee) || {
+        avatarUrl: entry.avatarUrl,
+        inProgress: 0,
+        todo: 0,
+        completed: 0,
+        totalPoints: 0,
+      };
+      existing.inProgress += entry.inProgress;
+      existing.todo += entry.todo;
+      existing.completed += entry.completed;
+      existing.totalPoints += entry.totalPoints;
+      merged.set(entry.assignee, existing);
+    }
+  }
+
+  return Array.from(merged.entries())
+    .map(([assignee, data]) => ({ assignee, ...data }))
+    .sort((a, b) => b.inProgress + b.todo - (a.inProgress + a.todo));
+}
+
 export function LinearSection({ refreshKey }: { refreshKey: number }) {
   const [viewMode, setViewMode] = useState<ViewMode>("weekly");
   const [sliderDays, setSliderDays] = useState(42);
@@ -137,6 +217,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
   if (!data) return null;
 
   const isCycles = data.mode === "cycles";
+  const hasCycleWorkloads = isCycles && data.availableCycles.length > 0;
 
   return (
     <div className="space-y-4">
@@ -181,12 +262,16 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Workload Distribution
-          </h3>
-          <WorkloadDistribution data={data.workloadDistribution} />
-        </Card>
+        {hasCycleWorkloads ? (
+          <CycleWorkloadCard data={data} />
+        ) : (
+          <Card>
+            <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Workload Distribution
+            </h3>
+            <WorkloadDistribution data={data.workloadDistribution} />
+          </Card>
+        )}
         <Card>
           <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Stalled Issues
@@ -195,5 +280,33 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+function CycleWorkloadCard({ data }: { data: LinearMetrics }) {
+  const [selectedCycles, setSelectedCycles] = useState<Set<string>>(() => {
+    const current = data.availableCycles.find((c) => c.isCurrent);
+    return new Set(current ? [current.name] : data.availableCycles.length > 0 ? [data.availableCycles[0].name] : []);
+  });
+
+  const mergedWorkload = useMemo(
+    () => mergeWorkloads(data.workloadByCycle, selectedCycles),
+    [data.workloadByCycle, selectedCycles]
+  );
+
+  return (
+    <Card>
+      <div className="mb-3 space-y-2">
+        <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Workload Distribution
+        </h3>
+        <CyclePicker
+          cycles={data.availableCycles}
+          selected={selectedCycles}
+          onChange={setSelectedCycles}
+        />
+      </div>
+      <WorkloadDistribution data={mergedWorkload} />
+    </Card>
   );
 }

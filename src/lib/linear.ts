@@ -88,14 +88,19 @@ export async function fetchLinearMetrics(
   // If mode is explicitly "cycles", use cycles even if empty
   // If mode is auto (undefined), detect based on data
   if (mode === "cycles" || cycles.length > 0) {
-    return buildCycleMetrics(cycles);
+    return buildCycleMetrics(cycles, lookbackDays);
   } else {
-    return buildContinuousMetrics(teamId);
+    return buildContinuousMetrics(teamId, lookbackDays);
   }
 }
 
-function buildCycleMetrics(cycles: LinearCycle[]): LinearMetrics {
+function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 42): LinearMetrics {
   const now = new Date();
+  const since = new Date(now);
+  since.setDate(since.getDate() - lookbackDays);
+
+  // Filter cycles to those that overlap with the lookback window
+  cycles = cycles.filter((c) => new Date(c.endsAt) >= since);
 
   const currentCycle = cycles.find(
     (c) => new Date(c.startsAt) <= now && new Date(c.endsAt) >= now
@@ -121,9 +126,23 @@ function buildCycleMetrics(cycles: LinearCycle[]): LinearMetrics {
     : [];
 
   const stalledIssues = findStalledIssues(activeIssues, now);
+
+  // Build workload for current cycle (default view) and per-cycle workloads
   const workloadDistribution = buildWorkload(
     currentCycle ? currentCycle.issues.nodes : []
   );
+
+  const availableCycles = cycles.map((c) => ({
+    id: c.id,
+    name: c.name || `Cycle ${c.number}`,
+    isCurrent: c === currentCycle,
+  }));
+
+  const workloadByCycle: Record<string, WorkloadEntry[]> = {};
+  for (const cycle of cycles) {
+    const name = cycle.name || `Cycle ${cycle.number}`;
+    workloadByCycle[name] = buildWorkload(cycle.issues.nodes);
+  }
 
   const avgVelocity =
     velocityTrend.length > 0
@@ -141,6 +160,8 @@ function buildCycleMetrics(cycles: LinearCycle[]): LinearMetrics {
     velocityTrend,
     stalledIssues,
     workloadDistribution,
+    availableCycles,
+    workloadByCycle,
     timeInState,
     summary: {
       currentCycleName: currentCycle
@@ -237,6 +258,8 @@ async function buildContinuousMetrics(teamId: string, lookbackDays: number = 42)
     velocityTrend,
     stalledIssues,
     workloadDistribution,
+    availableCycles: [],
+    workloadByCycle: {},
     timeInState,
     summary: {
       currentCycleName: "Continuous flow",

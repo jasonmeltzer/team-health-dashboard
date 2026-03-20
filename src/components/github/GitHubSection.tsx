@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useApiData } from "@/hooks/useApiData";
 import type { PRMetrics } from "@/types/github";
 import { Card } from "@/components/ui/Card";
@@ -7,6 +8,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { cn } from "@/lib/utils";
 import { CycleTimeChart } from "./CycleTimeChart";
 import { ReviewBottlenecks } from "./ReviewBottlenecks";
 import { StalePRsList } from "./StalePRsList";
@@ -17,18 +19,78 @@ const GitHubIcon = () => (
   </svg>
 );
 
+const STALE_OPTIONS = [
+  { label: "3d", days: 3 },
+  { label: "5d", days: 5 },
+  { label: "7d", days: 7 },
+  { label: "14d", days: 14 },
+];
+
+const LOOKBACK_OPTIONS = [
+  { label: "7d", days: 7 },
+  { label: "14d", days: 14 },
+  { label: "30d", days: 30 },
+  { label: "60d", days: 60 },
+  { label: "90d", days: 90 },
+];
+
 export function GitHubSection({ refreshKey }: { refreshKey: number }) {
+  const [staleDays, setStaleDays] = useState(7);
+  const [lookbackDays, setLookbackDays] = useState(30);
   const { data, loading, error, notConfigured, refetch } = useApiData<PRMetrics>(
-    "/api/github",
+    `/api/github?staleDays=${staleDays}&lookbackDays=${lookbackDays}`,
     refreshKey
   );
 
   if (notConfigured) return null;
 
+  const controls = (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-zinc-400">Period</span>
+        <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-0.5 dark:border-zinc-700 dark:bg-zinc-800">
+          {LOOKBACK_OPTIONS.map((opt) => (
+            <button
+              key={opt.days}
+              onClick={() => setLookbackDays(opt.days)}
+              className={cn(
+                "rounded-md px-2 py-0.5 text-xs font-medium transition-colors",
+                lookbackDays === opt.days
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
+                  : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-zinc-400">Stale after</span>
+        <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-0.5 dark:border-zinc-700 dark:bg-zinc-800">
+          {STALE_OPTIONS.map((opt) => (
+            <button
+              key={opt.days}
+              onClick={() => setStaleDays(opt.days)}
+              className={cn(
+                "rounded-md px-2 py-0.5 text-xs font-medium transition-colors",
+                staleDays === opt.days
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
+                  : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="space-y-4">
-        <SectionHeader title="GitHub" icon={<GitHubIcon />} />
+        <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-24" />
@@ -42,7 +104,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
   if (error) {
     return (
       <div>
-        <SectionHeader title="GitHub" icon={<GitHubIcon />} />
+        <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} />
         <Card>
           <ErrorState message={error} onRetry={refetch} />
         </Card>
@@ -54,7 +116,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="GitHub" icon={<GitHubIcon />} />
+      <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard label="Open PRs" value={data.summary.totalOpenPRs} />
@@ -83,7 +145,10 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Review Bottlenecks
+            Review Bottlenecks{" "}
+            <span className="font-normal text-zinc-400">
+              (last {lookbackDays}d)
+            </span>
           </h3>
           <ReviewBottlenecks data={data.reviewBottlenecks} />
         </Card>
