@@ -97,46 +97,9 @@ export function TimeInState({ data }: { data: TimeInStateData }) {
         </div>
       </div>
 
-      {/* Tab content */}
-      {activeTab === "summary" && (
-        <SummaryTab
-          stats={filteredStats}
-          allStats={data.stats}
-          hiddenStates={hiddenStates}
-          toggleState={toggleState}
-        />
-      )}
-      {activeTab === "wip" && <WipTab issues={data.issues} />}
-      {activeTab === "outliers" && (
-        <OutliersTab issues={data.issues} stats={data.stats} />
-      )}
-      {activeTab === "assignee" && <AssigneeTab issues={data.issues} />}
-      {activeTab === "flow" && (
-        <FlowTab efficiency={data.flowEfficiency} issues={data.issues} />
-      )}
-      {activeTab === "trends" && <TrendsTab data={data} />}
-    </div>
-  );
-}
-
-/* ────────────────────────────────── Summary Tab ────────────────────────────────── */
-
-function SummaryTab({
-  stats,
-  allStats,
-  hiddenStates,
-  toggleState,
-}: {
-  stats: TimeInStateStats[];
-  allStats: TimeInStateStats[];
-  hiddenStates: Set<string>;
-  toggleState: (state: string) => void;
-}) {
-  return (
-    <div className="space-y-4">
-      {/* State filter toggles */}
+      {/* Global state filter toggles */}
       <div className="flex flex-wrap gap-2">
-        {allStats.map((d) => {
+        {data.stats.map((d) => {
           const hidden = hiddenStates.has(d.state);
           return (
             <button
@@ -161,6 +124,32 @@ function SummaryTab({
         })}
       </div>
 
+      {/* Tab content */}
+      {activeTab === "summary" && <SummaryTab stats={filteredStats} />}
+      {activeTab === "wip" && <WipTab issues={data.issues} />}
+      {activeTab === "outliers" && (
+        <OutliersTab issues={data.issues} stats={filteredStats} />
+      )}
+      {activeTab === "assignee" && (
+        <AssigneeTab issues={data.issues} hiddenStates={hiddenStates} />
+      )}
+      {activeTab === "flow" && (
+        <FlowTab
+          efficiency={data.flowEfficiency}
+          issues={data.issues}
+          hiddenStates={hiddenStates}
+        />
+      )}
+      {activeTab === "trends" && <TrendsTab data={data} />}
+    </div>
+  );
+}
+
+/* ────────────────────────────────── Summary Tab ────────────────────────────────── */
+
+function SummaryTab({ stats }: { stats: TimeInStateStats[] }) {
+  return (
+    <div className="space-y-4">
       {/* Chart */}
       {stats.length > 0 && (
         <div className="h-48">
@@ -442,12 +431,19 @@ function OutliersTab({
 
 /* ────────────────────────────────── By Assignee Tab ────────────────────────────────── */
 
-function AssigneeTab({ issues }: { issues: TimeInStateIssue[] }) {
+function AssigneeTab({
+  issues,
+  hiddenStates,
+}: {
+  issues: TimeInStateIssue[];
+  hiddenStates: Set<string>;
+}) {
   const { assignees, states, matrix } = useMemo(() => {
+    const filtered = issues.filter((i) => !hiddenStates.has(i.state));
     const map = new Map<string, Map<string, { count: number; totalDays: number }>>();
     const stateSet = new Set<string>();
 
-    for (const issue of issues) {
+    for (const issue of filtered) {
       const name = issue.assignee || "Unassigned";
       stateSet.add(issue.state);
       if (!map.has(name)) map.set(name, new Map());
@@ -461,7 +457,7 @@ function AssigneeTab({ issues }: { issues: TimeInStateIssue[] }) {
     const assignees = Array.from(map.keys()).sort();
     const states = Array.from(stateSet);
     return { assignees, states, matrix: map };
-  }, [issues]);
+  }, [issues, hiddenStates]);
 
   if (assignees.length === 0) {
     return (
@@ -552,16 +548,19 @@ function AssigneeTab({ issues }: { issues: TimeInStateIssue[] }) {
 function FlowTab({
   efficiency,
   issues,
+  hiddenStates,
 }: {
   efficiency: number;
   issues: TimeInStateIssue[];
+  hiddenStates: Set<string>;
 }) {
   const breakdown = useMemo(() => {
-    const active = issues.filter((i) => i.stateType === "started");
-    const waiting = issues.filter(
+    const visible = issues.filter((i) => !hiddenStates.has(i.state));
+    const active = visible.filter((i) => i.stateType === "started");
+    const waiting = visible.filter(
       (i) => i.stateType === "unstarted" || i.stateType === "backlog"
     );
-    const completed = issues.filter((i) => i.stateType === "completed");
+    const completed = visible.filter((i) => i.stateType === "completed");
 
     const activeDays = active.reduce((s, i) => s + i.daysInState, 0);
     const waitingDays = waiting.reduce((s, i) => s + i.daysInState, 0);
@@ -569,7 +568,7 @@ function FlowTab({
     const total = activeDays + waitingDays + completedDays;
 
     return { activeDays, waitingDays, completedDays, total };
-  }, [issues]);
+  }, [issues, hiddenStates]);
 
   const qualityLabel =
     efficiency >= 40
