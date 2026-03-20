@@ -16,6 +16,7 @@ export function StalePRsList({ data }: { data: StalePR[] }) {
           <tr className="border-b border-zinc-200 dark:border-zinc-700">
             <th className="pb-2 text-left font-medium text-zinc-500">PR</th>
             <th className="pb-2 text-left font-medium text-zinc-500">Author</th>
+            <th className="pb-2 text-left font-medium text-zinc-500">Reviewers</th>
             <th className="pb-2 text-right font-medium text-zinc-500">
               Days stale
             </th>
@@ -43,6 +44,11 @@ export function StalePRsList({ data }: { data: StalePR[] }) {
                 </span>
               </td>
               <td className="py-2 text-zinc-500">{pr.author}</td>
+              <td className="py-2 text-zinc-500">
+                {pr.reviewers.length > 0
+                  ? pr.reviewers.join(", ")
+                  : <span className="text-zinc-300 dark:text-zinc-600">none</span>}
+              </td>
               <td className="py-2 text-right font-medium text-red-600 dark:text-red-400">
                 {pr.daysSinceUpdate}d
               </td>
