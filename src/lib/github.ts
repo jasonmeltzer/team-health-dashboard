@@ -9,8 +9,9 @@ export async function fetchGitHubMetrics(
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
   const since = daysAgo(30).toISOString();
 
-  // Fetch recent PRs (last 30 days)
-  const pulls = await octokit.paginate(octokit.rest.pulls.list, {
+  // Fetch recent PRs — single page of 100 (sorted by updated desc),
+  // which is enough for most repos' last 30 days
+  const { data: pulls } = await octokit.rest.pulls.list({
     owner,
     repo,
     state: "all",
@@ -30,6 +31,30 @@ export async function fetchGitHubMetrics(
     { totalHours: number; count: number; reviewHours: number; reviewCount: number }
   >();
 
+  // Fetch first review for up to 20 merged PRs (to avoid rate limits)
+  const prsToFetchReviews = mergedPRs.slice(0, 20);
+  const reviewResults = await Promise.allSettled(
+    prsToFetchReviews.map((pr) =>
+      octokit.rest.pulls.listReviews({
+        owner,
+        repo,
+        pull_number: pr.number,
+        per_page: 1,
+      })
+    )
+  );
+  const reviewMap = new Map<number, string>();
+  prsToFetchReviews.forEach((pr, i) => {
+    const result = reviewResults[i];
+    if (
+      result.status === "fulfilled" &&
+      result.value.data.length > 0 &&
+      result.value.data[0].submitted_at
+    ) {
+      reviewMap.set(pr.number, result.value.data[0].submitted_at);
+    }
+  });
+
   for (const pr of mergedPRs) {
     const week = getISOWeek(new Date(pr.created_at));
     const cycleHours = hoursBetween(
@@ -46,24 +71,14 @@ export async function fetchGitHubMetrics(
     entry.totalHours += cycleHours;
     entry.count += 1;
 
-    // Get first review time
-    try {
-      const reviews = await octokit.rest.pulls.listReviews({
-        owner,
-        repo,
-        pull_number: pr.number,
-        per_page: 1,
-      });
-      if (reviews.data.length > 0) {
-        const firstReviewHours = hoursBetween(
-          new Date(pr.created_at),
-          new Date(reviews.data[0].submitted_at!)
-        );
-        entry.reviewHours += firstReviewHours;
-        entry.reviewCount += 1;
-      }
-    } catch {
-      // Skip review time if we can't fetch
+    const firstReviewAt = reviewMap.get(pr.number);
+    if (firstReviewAt) {
+      const firstReviewHours = hoursBetween(
+        new Date(pr.created_at),
+        new Date(firstReviewAt)
+      );
+      entry.reviewHours += firstReviewHours;
+      entry.reviewCount += 1;
     }
 
     weeklyData.set(week, entry);

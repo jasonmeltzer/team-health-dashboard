@@ -18,10 +18,12 @@ const GitHubIcon = () => (
 );
 
 export function GitHubSection({ refreshKey }: { refreshKey: number }) {
-  const { data, loading, error, refetch } = useApiData<PRMetrics>(
+  const { data, loading, error, notConfigured, refetch } = useApiData<PRMetrics>(
     "/api/github",
     refreshKey
   );
+
+  if (notConfigured) return null;
 
   if (loading) {
     return (

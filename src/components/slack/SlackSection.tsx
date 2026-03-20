@@ -18,10 +18,12 @@ const SlackIcon = () => (
 );
 
 export function SlackSection({ refreshKey }: { refreshKey: number }) {
-  const { data, loading, error, refetch } = useApiData<SlackMetrics>(
+  const { data, loading, error, notConfigured, refetch } = useApiData<SlackMetrics>(
     "/api/slack",
     refreshKey
   );
+
+  if (notConfigured) return null;
 
   if (loading) {
     return (

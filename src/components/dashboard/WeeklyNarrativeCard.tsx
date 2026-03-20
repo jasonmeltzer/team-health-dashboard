@@ -7,10 +7,12 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 
 export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
-  const { data, loading, error, refetch } = useApiData<WeeklyNarrative>(
+  const { data, loading, error, notConfigured, refetch } = useApiData<WeeklyNarrative>(
     "/api/weekly-narrative",
     refreshKey
   );
+
+  if (notConfigured) return null;
 
   if (loading) {
     return (

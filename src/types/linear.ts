@@ -1,6 +1,6 @@
 export interface VelocityDataPoint {
   cycleName: string;
-  cycleNumber: number;
+  cycleNumber?: number;
   completedIssues: number;
   completedPoints: number;
   scopeChange: number;
@@ -25,10 +25,45 @@ export interface WorkloadEntry {
   totalPoints: number;
 }
 
+export interface TimeInStateStats {
+  state: string;
+  count: number;
+  minDays: number;
+  maxDays: number;
+  meanDays: number;
+  medianDays: number;
+  p90Days: number;
+}
+
+export interface TimeInStateIssue {
+  identifier: string;
+  title: string;
+  state: string;
+  stateType: string;
+  assignee: string | null;
+  daysInState: number;
+  url: string;
+}
+
+export interface LeadTimeTrendPoint {
+  week: string;
+  avgDays: number;
+  count: number;
+}
+
+export interface TimeInStateData {
+  stats: TimeInStateStats[];
+  issues: TimeInStateIssue[];
+  flowEfficiency: number;
+  leadTimeTrend: LeadTimeTrendPoint[];
+}
+
 export interface LinearMetrics {
+  mode: "cycles" | "continuous";
   velocityTrend: VelocityDataPoint[];
   stalledIssues: StalledIssue[];
   workloadDistribution: WorkloadEntry[];
+  timeInState: TimeInStateData;
   summary: {
     currentCycleName: string;
     currentCycleProgress: number;

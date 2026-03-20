@@ -22,7 +22,7 @@ export function ReviewBottlenecks({ data }: { data: ReviewBottleneck[] }) {
 
   return (
     <div className="h-64">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
         <BarChart data={data} layout="vertical">
           <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
           <XAxis type="number" tick={{ fontSize: 12 }} stroke="#a1a1aa" />

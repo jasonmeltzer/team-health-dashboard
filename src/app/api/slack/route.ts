@@ -4,18 +4,8 @@ export async function GET() {
   try {
     const channelIdsStr = process.env.SLACK_CHANNEL_IDS;
 
-    if (!channelIdsStr) {
-      return Response.json(
-        { error: "SLACK_CHANNEL_IDS is not configured" },
-        { status: 400 }
-      );
-    }
-
-    if (!process.env.SLACK_BOT_TOKEN) {
-      return Response.json(
-        { error: "SLACK_BOT_TOKEN is not configured" },
-        { status: 400 }
-      );
+    if (!channelIdsStr || !process.env.SLACK_BOT_TOKEN) {
+      return Response.json({ notConfigured: true });
     }
 
     const channelIds = channelIdsStr.split(",").map((id) => id.trim());

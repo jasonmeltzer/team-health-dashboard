@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useApiData } from "@/hooks/useApiData";
 import type { LinearMetrics } from "@/types/linear";
 import { Card } from "@/components/ui/Card";
@@ -7,9 +8,11 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { cn } from "@/lib/utils";
 import { VelocityChart } from "./VelocityChart";
 import { StalledIssuesList } from "./StalledIssuesList";
 import { WorkloadDistribution } from "./WorkloadDistribution";
+import { TimeInState } from "./TimeInState";
 
 const LinearIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
@@ -17,16 +20,99 @@ const LinearIcon = () => (
   </svg>
 );
 
+type ViewMode = "cycles" | "weekly";
+
+const MIN_DAYS = 7;
+const MAX_DAYS = 180;
+
+function ViewToggle({
+  mode,
+  onChange,
+}: {
+  mode: ViewMode;
+  onChange: (mode: ViewMode) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-0.5 dark:border-zinc-700 dark:bg-zinc-800">
+      {(["cycles", "weekly"] as const).map((m) => (
+        <button
+          key={m}
+          onClick={() => onChange(m)}
+          className={cn(
+            "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+            mode === m
+              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
+              : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+          )}
+        >
+          {m === "cycles" ? "Cycles" : "Weekly"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function formatDaysLabel(days: number): string {
+  if (days < 14) return `${days}d`;
+  if (days < 60) return `${Math.round(days / 7)}wk`;
+  return `${Math.round(days / 30)}mo`;
+}
+
+function RangeSlider({
+  days,
+  onChange,
+  onCommit,
+}: {
+  days: number;
+  onChange: (days: number) => void;
+  onCommit: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-zinc-500 whitespace-nowrap">
+        {formatDaysLabel(days)}
+      </span>
+      <input
+        type="range"
+        min={MIN_DAYS}
+        max={MAX_DAYS}
+        step={7}
+        value={days}
+        onChange={(e) => onChange(parseInt(e.target.value, 10))}
+        onMouseUp={onCommit}
+        onTouchEnd={onCommit}
+        className="h-1.5 w-24 cursor-pointer appearance-none rounded-full bg-zinc-200 accent-zinc-700 dark:bg-zinc-700 dark:accent-zinc-300 sm:w-32"
+      />
+    </div>
+  );
+}
+
 export function LinearSection({ refreshKey }: { refreshKey: number }) {
-  const { data, loading, error, refetch } = useApiData<LinearMetrics>(
-    "/api/linear",
+  const [viewMode, setViewMode] = useState<ViewMode>("weekly");
+  const [sliderDays, setSliderDays] = useState(42);
+  const [committedDays, setCommittedDays] = useState(42);
+  const { data, loading, error, notConfigured, refetch } = useApiData<LinearMetrics>(
+    `/api/linear?mode=${viewMode}&days=${committedDays}`,
     refreshKey
+  );
+
+  if (notConfigured) return null;
+
+  const controls = (
+    <div className="flex items-center gap-2">
+      <RangeSlider
+        days={sliderDays}
+        onChange={setSliderDays}
+        onCommit={() => setCommittedDays(sliderDays)}
+      />
+      <ViewToggle mode={viewMode} onChange={setViewMode} />
+    </div>
   );
 
   if (loading) {
     return (
       <div className="space-y-4">
-        <SectionHeader title="Linear" icon={<LinearIcon />} />
+        <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-24" />
@@ -40,7 +126,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
   if (error) {
     return (
       <div>
-        <SectionHeader title="Linear" icon={<LinearIcon />} />
+        <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} />
         <Card>
           <ErrorState message={error} onRetry={refetch} />
         </Card>
@@ -50,35 +136,48 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
 
   if (!data) return null;
 
+  const isCycles = data.mode === "cycles";
+
   return (
     <div className="space-y-4">
-      <SectionHeader title="Linear" icon={<LinearIcon />} />
+      <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard
-          label="Current Cycle"
+          label={isCycles ? "Current Cycle" : "Mode"}
           value={data.summary.currentCycleName}
         />
-        <MetricCard
-          label="Progress"
-          value={`${data.summary.currentCycleProgress}%`}
-        />
+        {isCycles ? (
+          <MetricCard
+            label="Progress"
+            value={`${data.summary.currentCycleProgress}%`}
+          />
+        ) : (
+          <MetricCard
+            label="Active Issues"
+            value={data.summary.totalActiveIssues}
+          />
+        )}
         <MetricCard
           label="Stalled Issues"
           value={data.summary.stalledIssueCount}
           trend={data.summary.stalledIssueCount > 3 ? "up" : "flat"}
         />
         <MetricCard
-          label="Avg Velocity"
-          value={`${data.summary.avgVelocity} pts`}
+          label={isCycles ? "Avg Velocity" : "Avg Throughput"}
+          value={`${data.summary.avgVelocity} pts/${isCycles ? "cycle" : "wk"}`}
         />
       </div>
 
       <Card>
         <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Sprint Velocity
+          {isCycles ? "Sprint Velocity" : "Weekly Throughput"}
         </h3>
         <VelocityChart data={data.velocityTrend} />
+      </Card>
+
+      <Card>
+        <TimeInState data={data.timeInState} />
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">

@@ -8,10 +8,12 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 
 export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
-  const { data, loading, error, refetch } = useApiData<HealthSummary>(
+  const { data, loading, error, notConfigured, refetch } = useApiData<HealthSummary>(
     "/api/health-summary",
     refreshKey
   );
+
+  if (notConfigured) return null;
 
   if (loading) {
     return (

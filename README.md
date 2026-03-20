@@ -6,15 +6,18 @@ AI-powered engineering team health dashboard that aggregates metrics from GitHub
 
 - **Overall health score** with AI-generated insights and recommendations
 - **GitHub PR metrics**: cycle time trends, review bottlenecks, stale PRs
-- **Linear sprint metrics**: velocity trends, stalled issues, workload distribution
+- **Linear sprint metrics**: velocity/throughput trends, stalled issues, workload distribution
+- **Time-in-state deep dive** (tabbed): summary stats, current WIP age, outlier issues, per-assignee heatmap, flow efficiency, lead time trends
+- **Cycles / Weekly toggle**: supports both cycle-based sprints and continuous flow, switchable in the UI
 - **Slack communication metrics**: response times, channel activity, overload detection
 - **Weekly AI narrative**: a concise team health summary written by Claude
+- **Graceful degradation**: unconfigured integrations are hidden, not errored
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 14 (App Router) + TypeScript |
+| Framework | Next.js 16 (App Router) + TypeScript |
 | Styling | Tailwind CSS |
 | Charts | Recharts |
 | AI | Claude API (Anthropic SDK) |
@@ -55,7 +58,7 @@ Each section loads independently with its own loading/error states.
 ### Install & Run
 
 ```bash
-git clone https://github.com/yourusername/team-health-dashboard.git
+git clone https://github.com/jasonmeltzer/team-health-dashboard.git
 cd team-health-dashboard
 npm install
 cp .env.example .env.local
@@ -95,7 +98,7 @@ src/
 ├── components/
 │   ├── dashboard/                # Shell, health card, narrative, metrics
 │   ├── github/                   # PR charts and tables
-│   ├── linear/                   # Sprint charts and lists
+│   ├── linear/                   # Sprint charts, time-in-state, workload
 │   ├── slack/                    # Communication charts
 │   └── ui/                       # Shared primitives (Card, Badge, etc.)
 ├── hooks/
@@ -136,7 +139,6 @@ Contributions welcome! Some ideas for improvement:
 - Add date range selector
 - Persist historical data with SQLite
 - Add email/Slack notifications for health drops
-- Dark mode toggle
 
 ## License
 

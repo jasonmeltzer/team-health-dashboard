@@ -6,10 +6,7 @@ import { generateHealthSummary } from "@/lib/claude";
 export async function GET() {
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
-      return Response.json(
-        { error: "ANTHROPIC_API_KEY is not configured" },
-        { status: 400 }
-      );
+      return Response.json({ notConfigured: true });
     }
 
     const owner = process.env.GITHUB_ORG;
@@ -51,9 +48,11 @@ export async function GET() {
       summary: { totalOpenPRs: 0, avgCycleTimeHours: 0, stalePRCount: 0, prsNeedingReview: 0 },
     };
     const emptyLinear = {
+      mode: "continuous" as const,
       velocityTrend: [],
       stalledIssues: [],
       workloadDistribution: [],
+      timeInState: { stats: [], issues: [], flowEfficiency: 0, leadTimeTrend: [] },
       summary: { currentCycleName: "N/A", currentCycleProgress: 0, totalActiveIssues: 0, stalledIssueCount: 0, avgVelocity: 0 },
     };
     const emptySlack = {

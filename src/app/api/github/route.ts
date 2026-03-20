@@ -7,18 +7,8 @@ export async function GET(request: NextRequest) {
     const owner = searchParams.get("owner") || process.env.GITHUB_ORG;
     const repo = searchParams.get("repo") || process.env.GITHUB_REPO;
 
-    if (!owner || !repo) {
-      return Response.json(
-        { error: "GITHUB_ORG and GITHUB_REPO must be configured" },
-        { status: 400 }
-      );
-    }
-
-    if (!process.env.GITHUB_TOKEN) {
-      return Response.json(
-        { error: "GITHUB_TOKEN is not configured" },
-        { status: 400 }
-      );
+    if (!owner || !repo || !process.env.GITHUB_TOKEN) {
+      return Response.json({ notConfigured: true });
     }
 
     const metrics = await fetchGitHubMetrics(owner, repo);
