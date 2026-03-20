@@ -2,6 +2,8 @@
 
 AI-powered engineering team health dashboard that aggregates metrics from GitHub, Linear, and Slack, then uses Claude to generate actionable weekly insights.
 
+> **Note:** The Slack integration and AI features (Ollama and Anthropic) have not yet been tested end-to-end.
+
 ## What It Does
 
 - **Overall health score** with AI-generated insights and recommendations
