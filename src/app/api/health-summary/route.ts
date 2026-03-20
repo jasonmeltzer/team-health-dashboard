@@ -2,14 +2,11 @@ import { fetchGitHubMetrics } from "@/lib/github";
 import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
 import { generateHealthSummary, isAIConfigured, OllamaNotRunningError } from "@/lib/claude";
+import { computeHealthScore } from "@/lib/scoring";
 import { getConfig } from "@/lib/config";
 
 export async function GET() {
   try {
-    if (!isAIConfigured()) {
-      return Response.json({ notConfigured: true });
-    }
-
     const owner = getConfig("GITHUB_ORG");
     const repo = getConfig("GITHUB_REPO");
     const teamId = getConfig("LINEAR_TEAM_ID");
@@ -40,10 +37,50 @@ export async function GET() {
       );
     }
 
-    const summary = await generateHealthSummary(github, linear, slack);
+    // Compute deterministic score first
+    const scoreResult = computeHealthScore(github, linear, slack);
 
+    // If AI is configured, enrich with LLM insights; otherwise return score-only
+    if (isAIConfigured()) {
+      try {
+        const summary = await generateHealthSummary(github, linear, slack, scoreResult);
+        return Response.json({
+          data: summary,
+          fetchedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        if (error instanceof OllamaNotRunningError) {
+          // AI not reachable — still return the computed score with breakdown as insights
+          return Response.json({
+            data: {
+              overallHealth: scoreResult.overallHealth,
+              score: scoreResult.score,
+              scoreBreakdown: scoreResult.deductions,
+              insights: scoreResult.deductions
+                .filter((d) => d.points > 0)
+                .map((d) => `${d.signal}: ${d.detail}`),
+              recommendations: ["Connect an AI provider (Ollama or Anthropic) for richer insights."],
+              generatedAt: new Date().toISOString(),
+            },
+            fetchedAt: new Date().toISOString(),
+          });
+        }
+        throw error;
+      }
+    }
+
+    // No AI configured — return score with breakdown as insights
     return Response.json({
-      data: summary,
+      data: {
+        overallHealth: scoreResult.overallHealth,
+        score: scoreResult.score,
+        scoreBreakdown: scoreResult.deductions,
+        insights: scoreResult.deductions
+          .filter((d) => d.points > 0)
+          .map((d) => `${d.signal}: ${d.detail}`),
+        recommendations: ["Connect an AI provider (Ollama or Anthropic) for richer insights."],
+        generatedAt: new Date().toISOString(),
+      },
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {

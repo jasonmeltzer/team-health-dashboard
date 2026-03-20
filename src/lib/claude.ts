@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { PRMetrics } from "@/types/github";
 import type { LinearMetrics } from "@/types/linear";
 import type { SlackMetrics } from "@/types/slack";
-import type { HealthSummary, WeeklyNarrative } from "@/types/metrics";
+import type { HealthSummary, WeeklyNarrative, ScoreDeduction } from "@/types/metrics";
 import { getConfig } from "@/lib/config";
 
 export class OllamaNotRunningError extends Error {
@@ -111,7 +111,8 @@ async function chatCompletion(
 export async function generateHealthSummary(
   github: PRMetrics | null,
   linear: LinearMetrics | null,
-  slack: SlackMetrics | null
+  slack: SlackMetrics | null,
+  scoreResult: { score: number; overallHealth: string; deductions: ScoreDeduction[] }
 ): Promise<HealthSummary> {
   const ALL_SOURCES = ["GitHub", "Linear", "Slack"];
   const sources: string[] = [];
@@ -120,21 +121,26 @@ export async function generateHealthSummary(
   if (slack) sources.push("Slack");
   const notConnected = ALL_SOURCES.filter((s) => !sources.includes(s));
 
-  const system = `You are an engineering team health analyst. Analyze the provided metrics and return a JSON object with this exact shape:
+  // Format the score breakdown for the LLM context
+  const deductionSummary = scoreResult.deductions
+    .filter((d) => d.points > 0)
+    .map((d) => `  - ${d.signal}: -${d.points} pts (${d.detail})`)
+    .join("\n");
 
-{"overallHealth":"healthy","score":85,"insights":["insight1","insight2","insight3"],"recommendations":["rec1","rec2"]}
+  const system = `You are an engineering team health analyst. The health score has already been computed (${scoreResult.score}/100, ${scoreResult.overallHealth}). Your job is to provide insights and recommendations.
+
+Return a JSON object with this exact shape:
+{"insights":["insight1","insight2","insight3"],"recommendations":["rec1","rec2"]}
 
 Rules:
 - Return ONLY valid JSON. No markdown, no code fences, no explanation before or after.
-- overallHealth: "healthy" (score 80-100), "warning" (50-79), or "critical" (0-49)
 - insights: 3-5 strings. Each must cite a specific number from the data. No generic statements.
 - recommendations: 2-3 actionable strings. Be specific about what to do.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}. Do not reference, speculate about, or suggest configuring these.` : ""}
+- Focus your insights on the signals that scored poorly (shown below).
 
-Scoring guide:
-- 80-100 = healthy: Low cycle times, good velocity, no major bottlenecks
-- 50-79 = warning: Some bottlenecks, stalled work, or overload signals
-- 0-49 = critical: Significant blockers, high cycle times, or severe overload`;
+Score breakdown (signals that lost points):
+${deductionSummary || "  (none — everything looks healthy)"}`;
 
   const sections: string[] = [];
 
@@ -165,7 +171,7 @@ Scoring guide:
 - Overload details: ${JSON.stringify(slack.overloadIndicators.filter((o) => o.isOverloaded))}`);
   }
 
-  const userMessage = `Analyze these engineering team metrics from the past week:\n\n${sections.join("\n\n")}`;
+  const userMessage = `Provide insights and recommendations for these engineering team metrics:\n\n${sections.join("\n\n")}`;
 
   const text = await chatCompletion(system, userMessage, 1024, {
     temperature: 0,
@@ -176,8 +182,9 @@ Scoring guide:
     const json = extractJSON(text);
     const parsed = JSON.parse(json);
     return {
-      overallHealth: parsed.overallHealth || "warning",
-      score: typeof parsed.score === "number" ? parsed.score : 50,
+      overallHealth: scoreResult.overallHealth as HealthSummary["overallHealth"],
+      score: scoreResult.score,
+      scoreBreakdown: scoreResult.deductions,
       insights: Array.isArray(parsed.insights) ? parsed.insights : [],
       recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
       generatedAt: new Date().toISOString(),
@@ -185,11 +192,16 @@ Scoring guide:
   } catch (err) {
     console.error("[health-summary] Failed to parse AI response:", err);
     console.error("[health-summary] Raw text:", text.slice(0, 500));
+    // Score is still valid even if LLM fails — return it with fallback text
     return {
-      overallHealth: "warning",
-      score: 50,
-      insights: ["AI analysis could not be parsed. Try refreshing, or try a different model (e.g. llama3.1 or mistral)."],
-      recommendations: ["Run 'ollama list' to check available models.", "Larger models (8B+) handle structured JSON output more reliably."],
+      overallHealth: scoreResult.overallHealth as HealthSummary["overallHealth"],
+      score: scoreResult.score,
+      scoreBreakdown: scoreResult.deductions,
+      insights: scoreResult.deductions
+        .filter((d) => d.points > 0)
+        .slice(0, 5)
+        .map((d) => `${d.signal}: ${d.detail}`),
+      recommendations: ["AI-generated recommendations unavailable. Score breakdown shown above."],
       generatedAt: new Date().toISOString(),
     };
   }
