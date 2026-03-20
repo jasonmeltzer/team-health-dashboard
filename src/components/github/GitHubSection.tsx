@@ -153,6 +153,9 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
         <MetricCard
           label="Needs Review"
           value={data.summary.prsNeedingReview}
+          onClick={() => {
+            document.getElementById("open-prs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
         />
       </div>
 
