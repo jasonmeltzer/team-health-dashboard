@@ -40,35 +40,7 @@ export async function GET() {
       );
     }
 
-    // Provide empty defaults for missing sources
-    const emptyGithub = {
-      cycleTimeTrend: [],
-      reviewBottlenecks: [],
-      stalePRs: [],
-      summary: { totalOpenPRs: 0, avgCycleTimeHours: 0, stalePRCount: 0, prsNeedingReview: 0 },
-    };
-    const emptyLinear = {
-      mode: "continuous" as const,
-      velocityTrend: [],
-      stalledIssues: [],
-      workloadDistribution: [],
-      availableCycles: [],
-      workloadByCycle: {},
-      timeInState: { stats: [], issues: [], flowEfficiency: 0, leadTimeTrend: [] },
-      summary: { currentCycleName: "N/A", currentCycleProgress: 0, totalActiveIssues: 0, stalledIssueCount: 0, avgVelocity: 0 },
-    };
-    const emptySlack = {
-      responseTimeTrend: [],
-      channelActivity: [],
-      overloadIndicators: [],
-      summary: { totalMessages7Days: 0, avgResponseMinutes: 0, mostActiveChannel: "N/A", potentiallyOverloaded: 0 },
-    };
-
-    const summary = await generateHealthSummary(
-      github || emptyGithub,
-      linear || emptyLinear,
-      slack || emptySlack
-    );
+    const summary = await generateHealthSummary(github, linear, slack);
 
     return Response.json({
       data: summary,

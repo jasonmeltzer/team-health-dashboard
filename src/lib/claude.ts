@@ -99,10 +99,15 @@ async function chatCompletion(
 }
 
 export async function generateHealthSummary(
-  github: PRMetrics,
-  linear: LinearMetrics,
-  slack: SlackMetrics
+  github: PRMetrics | null,
+  linear: LinearMetrics | null,
+  slack: SlackMetrics | null
 ): Promise<HealthSummary> {
+  const sources: string[] = [];
+  if (github) sources.push("GitHub");
+  if (linear) sources.push("Linear");
+  if (slack) sources.push("Slack");
+
   const system = `You are an engineering team health analyst. Analyze the provided metrics and return ONLY a JSON object with this exact shape:
 
 {"overallHealth":"healthy","score":85,"insights":["insight1","insight2","insight3"],"recommendations":["rec1","rec2"]}
@@ -112,35 +117,43 @@ Rules:
 - overallHealth: "healthy" (score 80-100), "warning" (50-79), or "critical" (0-49)
 - insights: 3-5 strings. Each must cite a specific number from the data. No generic statements.
 - recommendations: 2-3 actionable strings. Be specific about what to do.
-- If a data source has zeros or empty arrays, ignore it — don't mention missing data.
+- ONLY analyze the data sources provided (${sources.join(", ")}). Do NOT mention or speculate about missing sources.
 
 Scoring guide:
 - 80-100 = healthy: Low cycle times, good velocity, no major bottlenecks
 - 50-79 = warning: Some bottlenecks, stalled work, or overload signals
 - 0-49 = critical: Significant blockers, high cycle times, or severe overload`;
 
-  const userMessage = `Analyze these engineering team metrics from the past week:
+  const sections: string[] = [];
 
-GitHub PR Metrics:
+  if (github) {
+    sections.push(`GitHub PR Metrics:
 - Open PRs: ${github.summary.totalOpenPRs}
 - Average cycle time: ${github.summary.avgCycleTimeHours} hours
 - Stale PRs (>7 days): ${github.summary.stalePRCount}
 - PRs needing review: ${github.summary.prsNeedingReview}
-- Review bottlenecks: ${JSON.stringify(github.reviewBottlenecks.slice(0, 5))}
+- Review bottlenecks: ${JSON.stringify(github.reviewBottlenecks.slice(0, 5))}`);
+  }
 
-Linear Sprint Metrics:
+  if (linear) {
+    sections.push(`Linear Sprint Metrics:
 - Current cycle: ${linear.summary.currentCycleName} (${linear.summary.currentCycleProgress}% complete)
 - Active issues: ${linear.summary.totalActiveIssues}
 - Stalled issues (>5 days no update): ${linear.summary.stalledIssueCount}
 - Average velocity: ${linear.summary.avgVelocity} points/cycle
-- Workload: ${JSON.stringify(linear.workloadDistribution.slice(0, 5))}
+- Workload: ${JSON.stringify(linear.workloadDistribution.slice(0, 5))}`);
+  }
 
-Slack Communication Metrics:
+  if (slack) {
+    sections.push(`Slack Communication Metrics:
 - Total messages (7 days): ${slack.summary.totalMessages7Days}
 - Average response time: ${slack.summary.avgResponseMinutes} minutes
 - Most active channel: ${slack.summary.mostActiveChannel}
 - Potentially overloaded team members: ${slack.summary.potentiallyOverloaded}
-- Overload details: ${JSON.stringify(slack.overloadIndicators.filter((o) => o.isOverloaded))}`;
+- Overload details: ${JSON.stringify(slack.overloadIndicators.filter((o) => o.isOverloaded))}`);
+  }
+
+  const userMessage = `Analyze these engineering team metrics from the past week:\n\n${sections.join("\n\n")}`;
 
   const text = await chatCompletion(system, userMessage, 1024);
 
@@ -168,12 +181,17 @@ Slack Communication Metrics:
 }
 
 export async function generateWeeklyNarrative(
-  github: PRMetrics,
-  linear: LinearMetrics,
-  slack: SlackMetrics
+  github: PRMetrics | null,
+  linear: LinearMetrics | null,
+  slack: SlackMetrics | null
 ): Promise<WeeklyNarrative> {
   const weekOf = new Date();
   weekOf.setDate(weekOf.getDate() - weekOf.getDay()); // Start of week
+
+  const sources: string[] = [];
+  if (github) sources.push("GitHub");
+  if (linear) sources.push("Linear");
+  if (slack) sources.push("Slack");
 
   const system = `You are an engineering team health analyst writing a weekly team health narrative.
 
@@ -182,24 +200,32 @@ Rules:
 - Be direct and specific — cite actual numbers from the data. Name specific people, PRs, or issues when relevant.
 - Focus on what changed, what's at risk, and what to do about it. Skip generic advice.
 - The tone should be like a sharp engineering manager's weekly update to their skip-level.
-- If a data source has no meaningful data (zeros, empty arrays), skip it — don't mention it.`;
+- ONLY discuss the data sources provided (${sources.join(", ")}). Do NOT mention or speculate about missing sources.`;
 
-  const userMessage = `Write a weekly team health narrative based on these metrics:
+  const sections: string[] = [];
 
-GitHub Trends:
+  if (github) {
+    sections.push(`GitHub Trends:
 ${JSON.stringify(github.cycleTimeTrend, null, 2)}
 Stale PRs: ${JSON.stringify(github.stalePRs, null, 2)}
-Review bottlenecks: ${JSON.stringify(github.reviewBottlenecks, null, 2)}
+Review bottlenecks: ${JSON.stringify(github.reviewBottlenecks, null, 2)}`);
+  }
 
-Linear Sprint Data:
+  if (linear) {
+    sections.push(`Linear Sprint Data:
 Velocity trend: ${JSON.stringify(linear.velocityTrend, null, 2)}
 Stalled issues: ${JSON.stringify(linear.stalledIssues, null, 2)}
-Workload: ${JSON.stringify(linear.workloadDistribution, null, 2)}
+Workload: ${JSON.stringify(linear.workloadDistribution, null, 2)}`);
+  }
 
-Slack Activity:
+  if (slack) {
+    sections.push(`Slack Activity:
 Response times: ${JSON.stringify(slack.responseTimeTrend, null, 2)}
 Channel activity: ${JSON.stringify(slack.channelActivity, null, 2)}
-Overload indicators: ${JSON.stringify(slack.overloadIndicators, null, 2)}`;
+Overload indicators: ${JSON.stringify(slack.overloadIndicators, null, 2)}`);
+  }
+
+  const userMessage = `Write a weekly team health narrative based on these metrics:\n\n${sections.join("\n\n")}`;
 
   const text = await chatCompletion(system, userMessage, 2048);
 
