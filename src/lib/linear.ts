@@ -384,7 +384,8 @@ function buildLeadTimeTrend(issues: LinearIssue[]): LeadTimeTrendPoint[] {
 
   return Array.from(weekMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, data]) => ({
+    .map(([sortKey, data]) => ({
+      sortKey,
       week: data.label,
       avgDays: Math.round((data.totalDays / data.count) * 10) / 10,
       count: data.count,

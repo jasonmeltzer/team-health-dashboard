@@ -727,7 +727,7 @@ function TrendsTab({ data }: { data: TimeInStateData }) {
           <tbody>
             {data.leadTimeTrend.map((row) => (
               <tr
-                key={row.week}
+                key={row.sortKey}
                 className="border-b border-zinc-100 dark:border-zinc-800"
               >
                 <td className="py-2 text-zinc-700 dark:text-zinc-300">

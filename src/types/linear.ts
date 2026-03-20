@@ -46,6 +46,7 @@ export interface TimeInStateIssue {
 }
 
 export interface LeadTimeTrendPoint {
+  sortKey: string;
   week: string;
   avgDays: number;
   count: number;
