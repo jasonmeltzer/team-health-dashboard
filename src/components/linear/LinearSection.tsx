@@ -178,6 +178,10 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
     refreshKey
   );
 
+  // State for programmatically switching the TimeInState tab
+  const [requestedTab, setRequestedTab] = useState<"wip" | null>(null);
+  const clearRequestedTab = useCallback(() => setRequestedTab(null), []);
+
   if (notConfigured) {
     return (
       <Card>
@@ -227,10 +231,6 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
       </div>
     );
   }
-
-  // State for programmatically switching the TimeInState tab
-  const [requestedTab, setRequestedTab] = useState<"wip" | null>(null);
-  const clearRequestedTab = useCallback(() => setRequestedTab(null), []);
 
   if (!data) return null;
 
