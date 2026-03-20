@@ -1,11 +1,70 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import { useApiData } from "@/hooks/useApiData";
 import type { HealthSummary } from "@/types/metrics";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+
+function ScoreInfo() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-medium text-zinc-500 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600"
+      >
+        ?
+      </button>
+      {open && (
+        <div className="absolute left-0 top-6 z-50 w-72 rounded-lg border border-zinc-200 bg-white p-3 text-xs text-zinc-600 shadow-lg dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+          <p className="mb-2 font-medium text-zinc-700 dark:text-zinc-300">
+            How the score works
+          </p>
+          <p className="mb-2">
+            An AI model analyzes your connected data sources (GitHub, Linear,
+            Slack) and assigns a 0-100 health score based on:
+          </p>
+          <ul className="mb-2 space-y-1 pl-3">
+            <li>Cycle times and review throughput</li>
+            <li>Stalled work and bottlenecks</li>
+            <li>Workload balance and velocity trends</li>
+            <li>Communication patterns (if Slack is connected)</li>
+          </ul>
+          <div className="space-y-0.5">
+            <p>
+              <span className="font-medium text-emerald-600">80-100 Healthy</span>{" "}
+              — smooth flow, no major blockers
+            </p>
+            <p>
+              <span className="font-medium text-amber-600">50-79 Warning</span>{" "}
+              — some bottlenecks or stalled work
+            </p>
+            <p>
+              <span className="font-medium text-red-600">0-49 Critical</span>{" "}
+              — significant blockers need attention
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
   const { data, loading, error, notConfigured, setupHint, refetch } = useApiData<HealthSummary>(
@@ -104,6 +163,7 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
               Team Health
+              <ScoreInfo />
             </h2>
             <Badge variant={data.overallHealth}>
               {data.overallHealth.charAt(0).toUpperCase() +
