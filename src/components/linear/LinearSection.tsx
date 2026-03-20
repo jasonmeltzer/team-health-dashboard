@@ -264,7 +264,6 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
         <MetricCard
           label="Stalled Issues"
           value={data.summary.stalledIssueCount}
-          trend={data.summary.stalledIssueCount > 3 ? "up" : "flat"}
           onClick={() => {
             document.getElementById("stalled-issues")?.scrollIntoView({ behavior: "smooth", block: "start" });
           }}

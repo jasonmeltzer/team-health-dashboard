@@ -139,7 +139,6 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
         <MetricCard
           label="Stale PRs"
           value={data.summary.stalePRCount}
-          trend={data.summary.stalePRCount > 3 ? "up" : "flat"}
           onClick={() => {
             document.getElementById("stale-prs")?.scrollIntoView({ behavior: "smooth", block: "start" });
           }}
