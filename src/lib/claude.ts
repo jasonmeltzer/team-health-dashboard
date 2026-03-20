@@ -3,18 +3,75 @@ import type { PRMetrics } from "@/types/github";
 import type { LinearMetrics } from "@/types/linear";
 import type { SlackMetrics } from "@/types/slack";
 import type { HealthSummary, WeeklyNarrative } from "@/types/metrics";
+import { getConfig } from "@/lib/config";
 
-const client = new Anthropic();
+type AIProvider = "anthropic" | "ollama";
+
+function getProvider(): AIProvider {
+  const explicit = getConfig("AI_PROVIDER");
+  if (explicit === "ollama" || explicit === "anthropic") return explicit;
+  return getConfig("ANTHROPIC_API_KEY") ? "anthropic" : "ollama";
+}
+
+export function isAIConfigured(): boolean {
+  const provider = getProvider();
+  if (provider === "anthropic") return !!getConfig("ANTHROPIC_API_KEY");
+  return true; // Ollama runs locally, no key needed
+}
+
+async function chatCompletion(
+  system: string,
+  userMessage: string,
+  maxTokens: number
+): Promise<string> {
+  const provider = getProvider();
+
+  if (provider === "anthropic") {
+    const client = new Anthropic({ apiKey: getConfig("ANTHROPIC_API_KEY") });
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-5-20250514",
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content: userMessage }],
+    });
+    return message.content[0].type === "text" ? message.content[0].text : "";
+  }
+
+  // Ollama via OpenAI-compatible API
+  const baseUrl = getConfig("OLLAMA_BASE_URL") || "http://localhost:11434";
+  const model = getConfig("OLLAMA_MODEL") || "llama3";
+
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: userMessage },
+      ],
+      max_tokens: maxTokens,
+      temperature: 0.3,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `Ollama API error (${response.status}): ${body}. Is Ollama running at ${baseUrl}?`
+    );
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || "";
+}
 
 export async function generateHealthSummary(
   github: PRMetrics,
   linear: LinearMetrics,
   slack: SlackMetrics
 ): Promise<HealthSummary> {
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-5-20250514",
-    max_tokens: 1024,
-    system: `You are an engineering team health analyst. Analyze the provided metrics and return ONLY a JSON object (no markdown, no code fences) with this exact shape:
+  const system = `You are an engineering team health analyst. Analyze the provided metrics and return ONLY a JSON object (no markdown, no code fences) with this exact shape:
 {
   "overallHealth": "healthy" | "warning" | "critical",
   "score": <number 0-100>,
@@ -27,11 +84,9 @@ Scoring guide:
 - 50-79 = warning: Some bottlenecks, stalled work, or overload signals
 - 0-49 = critical: Significant blockers, high cycle times, or severe overload
 
-Be specific. Cite numbers from the data. Focus on actionable intelligence.`,
-    messages: [
-      {
-        role: "user",
-        content: `Analyze these engineering team metrics from the past week:
+Be specific. Cite numbers from the data. Focus on actionable intelligence.`;
+
+  const userMessage = `Analyze these engineering team metrics from the past week:
 
 GitHub PR Metrics:
 - Open PRs: ${github.summary.totalOpenPRs}
@@ -52,13 +107,9 @@ Slack Communication Metrics:
 - Average response time: ${slack.summary.avgResponseMinutes} minutes
 - Most active channel: ${slack.summary.mostActiveChannel}
 - Potentially overloaded team members: ${slack.summary.potentiallyOverloaded}
-- Overload details: ${JSON.stringify(slack.overloadIndicators.filter((o) => o.isOverloaded))}`,
-      },
-    ],
-  });
+- Overload details: ${JSON.stringify(slack.overloadIndicators.filter((o) => o.isOverloaded))}`;
 
-  const text =
-    message.content[0].type === "text" ? message.content[0].text : "";
+  const text = await chatCompletion(system, userMessage, 1024);
 
   try {
     const parsed = JSON.parse(text);
@@ -88,14 +139,9 @@ export async function generateWeeklyNarrative(
   const weekOf = new Date();
   weekOf.setDate(weekOf.getDate() - weekOf.getDay()); // Start of week
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-5-20250514",
-    max_tokens: 2048,
-    system: `You are an engineering team health analyst writing a weekly team health narrative. Write a concise, actionable summary in 3-4 short paragraphs. Use plain text, no markdown headers. Be direct and specific — cite numbers, name patterns, and call out risks. The tone should be like a sharp engineering manager's weekly update.`,
-    messages: [
-      {
-        role: "user",
-        content: `Write a weekly team health narrative based on these metrics:
+  const system = `You are an engineering team health analyst writing a weekly team health narrative. Write a concise, actionable summary in 3-4 short paragraphs. Use plain text, no markdown headers. Be direct and specific — cite numbers, name patterns, and call out risks. The tone should be like a sharp engineering manager's weekly update.`;
+
+  const userMessage = `Write a weekly team health narrative based on these metrics:
 
 GitHub Trends:
 ${JSON.stringify(github.cycleTimeTrend, null, 2)}
@@ -110,13 +156,9 @@ Workload: ${JSON.stringify(linear.workloadDistribution, null, 2)}
 Slack Activity:
 Response times: ${JSON.stringify(slack.responseTimeTrend, null, 2)}
 Channel activity: ${JSON.stringify(slack.channelActivity, null, 2)}
-Overload indicators: ${JSON.stringify(slack.overloadIndicators, null, 2)}`,
-      },
-    ],
-  });
+Overload indicators: ${JSON.stringify(slack.overloadIndicators, null, 2)}`;
 
-  const text =
-    message.content[0].type === "text" ? message.content[0].text : "";
+  const text = await chatCompletion(system, userMessage, 2048);
 
   return {
     narrative: text,
