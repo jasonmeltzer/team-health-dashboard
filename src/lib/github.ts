@@ -12,20 +12,36 @@ export async function fetchGitHubMetrics(
   const octokit = new Octokit({ auth: getConfig("GITHUB_TOKEN") });
   const since = daysAgo(lookbackDays).toISOString();
 
-  // Fetch recent PRs — single page of 100 (sorted by updated desc),
-  // which is enough for most repos' last 30 days
-  const { data: pulls } = await octokit.rest.pulls.list({
-    owner,
-    repo,
-    state: "all",
-    sort: "updated",
-    direction: "desc",
-    per_page: 100,
-  });
-
-  const recentPulls = pulls.filter(
-    (pr) => new Date(pr.created_at) >= new Date(since)
+  // Paginate PRs sorted by updated desc, stopping when PRs fall outside
+  // the lookback window. Capped at 500 PRs to prevent runaway pagination.
+  const MAX_PRS = 500;
+  const sinceDate = new Date(since);
+  const pulls = await octokit.paginate(
+    octokit.rest.pulls.list,
+    {
+      owner,
+      repo,
+      state: "all",
+      sort: "updated",
+      direction: "desc",
+      per_page: 100,
+    },
+    (response, done) => {
+      const page = response.data;
+      // Stop if the oldest PR on this page is outside the lookback window
+      if (page.length > 0) {
+        const oldest = page[page.length - 1];
+        if (new Date(oldest.updated_at) < sinceDate) {
+          done();
+        }
+      }
+      return page;
+    }
   );
+
+  const recentPulls = pulls
+    .slice(0, MAX_PRS)
+    .filter((pr) => new Date(pr.created_at) >= sinceDate);
 
   // Compute cycle time trend (by week)
   const mergedPRs = recentPulls.filter((pr) => pr.merged_at);
@@ -34,8 +50,8 @@ export async function fetchGitHubMetrics(
     { totalHours: number; count: number; reviewHours: number; reviewCount: number }
   >();
 
-  // Fetch reviews for up to 30 recent PRs (serves both cycle time + bottleneck analysis)
-  const prsForReviews = recentPulls.slice(0, 30);
+  // Fetch reviews for up to 50 recent PRs (serves both cycle time + bottleneck analysis)
+  const prsForReviews = recentPulls.slice(0, 50);
   const reviewResults = await Promise.allSettled(
     prsForReviews.map((pr) =>
       octokit.rest.pulls.listReviews({
