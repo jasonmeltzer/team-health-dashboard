@@ -8,6 +8,7 @@ import { WeeklyNarrativeCard } from "./WeeklyNarrativeCard";
 import { GitHubSection } from "@/components/github/GitHubSection";
 import { LinearSection } from "@/components/linear/LinearSection";
 import { SlackSection } from "@/components/slack/SlackSection";
+import { DORASection } from "@/components/dora/DORASection";
 import { useTheme } from "@/components/ThemeProvider";
 
 export function DashboardShell() {
@@ -81,6 +82,7 @@ export function DashboardShell() {
 
       {/* Data Sections */}
       <GitHubSection refreshKey={refreshKey} />
+      <DORASection refreshKey={refreshKey} />
       <LinearSection refreshKey={refreshKey} />
       <SlackSection refreshKey={refreshKey} />
 

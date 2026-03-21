@@ -54,6 +54,10 @@ function ScoreInfo() {
               <p>Stalled issues, workload imbalance, velocity trend, flow efficiency, WIP per person, long-running items</p>
             </div>
             <div>
+              <p className="font-medium text-zinc-700 dark:text-zinc-300">DORA (up to 20 pts)</p>
+              <p>Deploy frequency, lead time, change failure rate, MTTR</p>
+            </div>
+            <div>
               <p className="font-medium text-zinc-700 dark:text-zinc-300">Slack (up to 20 pts)</p>
               <p>Response time, overloaded members, response time trend</p>
             </div>
@@ -92,6 +96,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   github: "GitHub",
   linear: "Linear",
   slack: "Slack",
+  dora: "DORA",
 };
 
 function ScoreBreakdown({

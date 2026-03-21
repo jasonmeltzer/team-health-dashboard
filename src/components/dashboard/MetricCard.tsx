@@ -11,7 +11,7 @@ export function MetricCard({
   label: string;
   value: string | number;
   trend?: "up" | "down" | "flat";
-  trendLabel?: string;
+  trendLabel?: React.ReactNode;
   onClick?: () => void;
 }) {
   return (
@@ -46,6 +46,9 @@ export function MetricCard({
             </span>
           )}
         </div>
+      )}
+      {!trend && trendLabel && (
+        <div className="flex items-center">{trendLabel}</div>
       )}
     </Card>
   );

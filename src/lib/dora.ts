@@ -1,0 +1,432 @@
+import { Octokit } from "octokit";
+import type {
+  DORAMetrics,
+  DeploymentRecord,
+  IncidentRecord,
+  DORADataPoint,
+  DORASummary,
+  DORARating,
+} from "@/types/dora";
+import { getISOWeek, hoursBetween, daysAgo } from "@/lib/utils";
+import { getConfig } from "@/lib/config";
+
+interface DORAOptions {
+  source?: "deployments" | "releases" | "auto";
+  environment?: string;
+  incidentLabels?: string[];
+}
+
+export async function fetchDORAMetrics(
+  owner: string,
+  repo: string,
+  lookbackDays: number = 30,
+  options: DORAOptions = {}
+): Promise<DORAMetrics> {
+  const octokit = new Octokit({ auth: getConfig("GITHUB_TOKEN") });
+  const since = daysAgo(lookbackDays);
+  const source = options.source || "auto";
+  const environment = options.environment || "production";
+  const incidentLabels = options.incidentLabels || [
+    "incident",
+    "hotfix",
+    "production-bug",
+  ];
+
+  // Fetch deployments or releases
+  let deployments: DeploymentRecord[];
+  let usedSource: "deployments" | "releases";
+
+  if (source === "releases") {
+    deployments = await fetchReleases(octokit, owner, repo, since);
+    usedSource = "releases";
+  } else if (source === "deployments") {
+    deployments = await fetchDeployments(
+      octokit,
+      owner,
+      repo,
+      since,
+      environment
+    );
+    usedSource = "deployments";
+  } else {
+    // auto: try deployments first, fall back to releases
+    deployments = await fetchDeployments(
+      octokit,
+      owner,
+      repo,
+      since,
+      environment
+    );
+    if (deployments.length > 0) {
+      usedSource = "deployments";
+    } else {
+      deployments = await fetchReleases(octokit, owner, repo, since);
+      usedSource = "releases";
+    }
+  }
+
+  // Fetch incidents (labeled issues + reverted PRs)
+  const incidents = await fetchIncidents(
+    octokit,
+    owner,
+    repo,
+    since,
+    incidentLabels
+  );
+
+  // Correlate incidents to deployments
+  correlateIncidents(deployments, incidents);
+
+  // Compute summary and trend
+  const summary = computeSummary(deployments, incidents, lookbackDays);
+  const trend = computeTrend(deployments, incidents);
+
+  return {
+    trend,
+    deployments: deployments.slice(0, 50),
+    incidents,
+    summary,
+    source: usedSource,
+  };
+}
+
+async function fetchDeployments(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  since: Date,
+  environment: string
+): Promise<DeploymentRecord[]> {
+  try {
+    const { data: deploys } = await octokit.rest.repos.listDeployments({
+      owner,
+      repo,
+      environment,
+      per_page: 100,
+    });
+
+    const recentDeploys = deploys.filter(
+      (d) => new Date(d.created_at) >= since
+    );
+
+    // Fetch statuses for each deployment (limit to 50)
+    const deploysToCheck = recentDeploys.slice(0, 50);
+    const statusResults = await Promise.allSettled(
+      deploysToCheck.map((d) =>
+        octokit.rest.repos.listDeploymentStatuses({
+          owner,
+          repo,
+          deployment_id: d.id,
+          per_page: 1,
+        })
+      )
+    );
+
+    return deploysToCheck.map((d, i) => {
+      const statusResult = statusResults[i];
+      let status: DeploymentRecord["status"] = "pending";
+      if (statusResult.status === "fulfilled") {
+        const statuses = statusResult.value.data;
+        if (statuses.length > 0) {
+          const s = statuses[0].state;
+          if (s === "success") status = "success";
+          else if (s === "failure") status = "failure";
+          else if (s === "error") status = "error";
+          else if (s === "inactive") status = "inactive";
+        }
+      }
+
+      return {
+        id: String(d.id),
+        environment: d.environment,
+        sha: d.sha,
+        ref: d.ref,
+        createdAt: d.created_at,
+        status,
+        url: d.url,
+        creator: d.creator?.login || "unknown",
+        description: d.description || null,
+        causedIncident: false,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function fetchReleases(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  since: Date
+): Promise<DeploymentRecord[]> {
+  try {
+    const { data: releases } = await octokit.rest.repos.listReleases({
+      owner,
+      repo,
+      per_page: 100,
+    });
+
+    return releases
+      .filter((r) => !r.draft && new Date(r.published_at || r.created_at) >= since)
+      .map((r) => ({
+        id: String(r.id),
+        environment: "production",
+        sha: r.target_commitish,
+        ref: r.tag_name,
+        createdAt: r.published_at || r.created_at,
+        status: "success" as const,
+        url: r.html_url,
+        creator: r.author?.login || "unknown",
+        description: r.name || r.tag_name,
+        causedIncident: false,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchIncidents(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  since: Date,
+  labels: string[]
+): Promise<IncidentRecord[]> {
+  const incidents: IncidentRecord[] = [];
+
+  // Fetch issues with incident labels
+  for (const label of labels) {
+    try {
+      const { data: issues } = await octokit.rest.issues.listForRepo({
+        owner,
+        repo,
+        labels: label,
+        state: "all",
+        since: since.toISOString(),
+        per_page: 50,
+        sort: "created",
+        direction: "desc",
+      });
+
+      for (const issue of issues) {
+        // Skip PRs (they appear in issues endpoint too)
+        if (issue.pull_request) continue;
+        // Avoid duplicates from overlapping labels
+        if (incidents.some((i) => i.number === issue.number)) continue;
+
+        incidents.push({
+          number: issue.number,
+          title: issue.title,
+          url: issue.html_url,
+          labels: issue.labels
+            .map((l) => (typeof l === "string" ? l : l.name || ""))
+            .filter(Boolean),
+          createdAt: issue.created_at,
+          closedAt: issue.closed_at,
+          resolutionHours: issue.closed_at
+            ? hoursBetween(
+                new Date(issue.created_at),
+                new Date(issue.closed_at)
+              )
+            : null,
+        });
+      }
+    } catch {
+      // Skip labels that don't exist or on permission errors
+    }
+  }
+
+  // Detect reverted PRs
+  try {
+    const { data: pulls } = await octokit.rest.pulls.list({
+      owner,
+      repo,
+      state: "closed",
+      sort: "updated",
+      direction: "desc",
+      per_page: 50,
+    });
+
+    for (const pr of pulls) {
+      if (!pr.merged_at) continue;
+      if (new Date(pr.merged_at) < since) continue;
+      if (/^revert\s/i.test(pr.title)) {
+        incidents.push({
+          number: pr.number,
+          title: pr.title,
+          url: pr.html_url,
+          labels: ["revert"],
+          createdAt: pr.created_at,
+          closedAt: pr.merged_at,
+          resolutionHours: hoursBetween(
+            new Date(pr.created_at),
+            new Date(pr.merged_at)
+          ),
+        });
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  return incidents.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+function correlateIncidents(
+  deployments: DeploymentRecord[],
+  incidents: IncidentRecord[]
+): void {
+  const CORRELATION_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+  for (const incident of incidents) {
+    const incidentTime = new Date(incident.createdAt).getTime();
+    for (const deploy of deployments) {
+      const deployTime = new Date(deploy.createdAt).getTime();
+      // Incident must come after deployment, within 24h
+      if (
+        incidentTime >= deployTime &&
+        incidentTime - deployTime <= CORRELATION_WINDOW_MS
+      ) {
+        deploy.causedIncident = true;
+        break;
+      }
+    }
+  }
+}
+
+function rateDORA(
+  metric: "frequency" | "leadTime" | "cfr" | "mttr",
+  value: number
+): DORARating {
+  switch (metric) {
+    case "frequency":
+      // deploys per week
+      if (value >= 7) return "elite"; // daily+
+      if (value >= 1) return "high"; // weekly+
+      if (value >= 0.25) return "medium"; // monthly+
+      return "low";
+    case "leadTime":
+      // hours
+      if (value < 1) return "elite";
+      if (value < 24) return "high";
+      if (value < 168) return "medium"; // 1 week
+      return "low";
+    case "cfr":
+      // percentage
+      if (value < 5) return "elite";
+      if (value < 10) return "high";
+      if (value < 15) return "medium";
+      return "low";
+    case "mttr":
+      // hours
+      if (value < 1) return "elite";
+      if (value < 24) return "high";
+      if (value < 168) return "medium"; // 1 week
+      return "low";
+  }
+}
+
+function computeSummary(
+  deployments: DeploymentRecord[],
+  incidents: IncidentRecord[],
+  lookbackDays: number
+): DORASummary {
+  const weeks = lookbackDays / 7;
+  const totalDeployments = deployments.length;
+  const frequency = weeks > 0 ? totalDeployments / weeks : 0;
+
+  const totalFailures = deployments.filter((d) => d.causedIncident).length;
+  const cfr = totalDeployments > 0 ? (totalFailures / totalDeployments) * 100 : 0;
+
+  const resolvedIncidents = incidents.filter((i) => i.resolutionHours != null);
+  const mttrHours =
+    resolvedIncidents.length > 0
+      ? Math.round(
+          (resolvedIncidents.reduce((s, i) => s + i.resolutionHours!, 0) /
+            resolvedIncidents.length) *
+            10
+        ) / 10
+      : null;
+
+  const openIncidents = incidents.filter((i) => i.closedAt == null).length;
+
+  return {
+    deploymentFrequency: Math.round(frequency * 10) / 10,
+    deploymentFrequencyRating: rateDORA("frequency", frequency),
+    avgLeadTimeHours: null, // Lead time requires commit-to-deploy tracking; approximate with cycle time
+    leadTimeRating: null,
+    changeFailureRate: Math.round(cfr * 10) / 10,
+    changeFailureRateRating: rateDORA("cfr", cfr),
+    mttrHours,
+    mttrRating: mttrHours != null ? rateDORA("mttr", mttrHours) : null,
+    totalDeployments,
+    totalFailures,
+    openIncidents,
+  };
+}
+
+function computeTrend(
+  deployments: DeploymentRecord[],
+  incidents: IncidentRecord[]
+): DORADataPoint[] {
+  const weekMap = new Map<
+    string,
+    {
+      total: number;
+      success: number;
+      failure: number;
+      incidents: IncidentRecord[];
+    }
+  >();
+
+  for (const d of deployments) {
+    const week = getISOWeek(new Date(d.createdAt));
+    const entry = weekMap.get(week) || {
+      total: 0,
+      success: 0,
+      failure: 0,
+      incidents: [],
+    };
+    entry.total++;
+    if (d.status === "success" && !d.causedIncident) entry.success++;
+    else entry.failure++;
+    weekMap.set(week, entry);
+  }
+
+  // Attach incidents to weeks
+  for (const inc of incidents) {
+    const week = getISOWeek(new Date(inc.createdAt));
+    const entry = weekMap.get(week);
+    if (entry) entry.incidents.push(inc);
+  }
+
+  return Array.from(weekMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([period, data]) => {
+      const resolved = data.incidents.filter(
+        (i) => i.resolutionHours != null
+      );
+      return {
+        period,
+        deploymentCount: data.total,
+        successCount: data.success,
+        failureCount: data.failure,
+        avgLeadTimeHours: null,
+        changeFailureRate:
+          data.total > 0
+            ? Math.round((data.failure / data.total) * 1000) / 10
+            : 0,
+        mttrHours:
+          resolved.length > 0
+            ? Math.round(
+                (resolved.reduce((s, i) => s + i.resolutionHours!, 0) /
+                  resolved.length) *
+                  10
+              ) / 10
+            : null,
+      };
+    });
+}

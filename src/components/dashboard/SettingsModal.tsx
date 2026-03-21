@@ -7,6 +7,7 @@ interface ConfigStatus {
   github: boolean;
   linear: boolean;
   slack: boolean;
+  dora: boolean;
   ai: boolean;
 }
 
@@ -16,10 +17,11 @@ interface SettingsModalProps {
   onSaved: () => void;
 }
 
-type Section = "github" | "linear" | "slack" | "ai";
+type Section = "github" | "linear" | "slack" | "dora" | "ai";
 
 const SECTIONS: { key: Section; label: string; description: string }[] = [
   { key: "github", label: "GitHub", description: "PR metrics, cycle time, review bottlenecks" },
+  { key: "dora", label: "DORA", description: "Deploy frequency, lead time, CFR, MTTR" },
   { key: "linear", label: "Linear", description: "Sprint velocity, workload, time-in-state" },
   { key: "slack", label: "Slack", description: "Response times, channel activity, overload" },
   { key: "ai", label: "AI Analysis", description: "Health summary and weekly narrative" },
@@ -35,6 +37,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
   const [github, setGithub] = useState({ token: "", org: "", repo: "" });
   const [linear, setLinear] = useState({ apiKey: "", teamId: "" });
   const [slack, setSlack] = useState({ botToken: "", channelIds: "" });
+  const [doraSettings, setDoraSettings] = useState({ source: "auto", environment: "production", incidentLabels: "incident,hotfix,production-bug" });
   const [ai, setAi] = useState({ provider: "ollama", anthropicKey: "", ollamaUrl: "", ollamaModel: "" });
 
   const fetchStatus = useCallback(async () => {
@@ -96,6 +99,13 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
     handleSave({
       SLACK_BOT_TOKEN: slack.botToken,
       SLACK_CHANNEL_IDS: slack.channelIds,
+    });
+
+  const saveDora = () =>
+    handleSave({
+      DORA_DEPLOYMENT_SOURCE: doraSettings.source,
+      DORA_ENVIRONMENT: doraSettings.environment,
+      DORA_INCIDENT_LABELS: doraSettings.incidentLabels,
     });
 
   const saveAi = () =>
@@ -257,6 +267,42 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                   },
                 ]}
                 onSave={saveSlack}
+                saving={saving}
+              />
+            )}
+
+            {activeSection === "dora" && (
+              <SectionForm
+                title="DORA Metrics"
+                description="DORA metrics use your GitHub configuration. These settings customize how deployment and incident data is detected."
+                configured={status?.dora}
+                fields={[
+                  {
+                    label: "Deployment Source",
+                    placeholder: "auto",
+                    value: doraSettings.source,
+                    onChange: (v) => setDoraSettings((s) => ({ ...s, source: v })),
+                    hint: "auto, deployments, or releases",
+                    help: "Controls where deployment data comes from:\n- \"auto\" (default): Tries GitHub Deployments API first, falls back to Releases\n- \"deployments\": Only use GitHub Deployments API (for CI/CD workflows)\n- \"releases\": Only use GitHub Releases/tags",
+                  },
+                  {
+                    label: "Environment",
+                    placeholder: "production",
+                    value: doraSettings.environment,
+                    onChange: (v) => setDoraSettings((s) => ({ ...s, environment: v })),
+                    hint: "GitHub deployment environment name",
+                    help: "The deployment environment to track (e.g., \"production\", \"staging\"). Only used when deployment source is \"deployments\" or \"auto\".",
+                  },
+                  {
+                    label: "Incident Labels",
+                    placeholder: "incident,hotfix,production-bug",
+                    value: doraSettings.incidentLabels,
+                    onChange: (v) => setDoraSettings((s) => ({ ...s, incidentLabels: v })),
+                    hint: "Comma-separated GitHub issue labels",
+                    help: "GitHub issue labels that indicate production incidents. Used to calculate Change Failure Rate and MTTR.\n\nReverted PRs (titles starting with \"Revert\") are also detected automatically.",
+                  },
+                ]}
+                onSave={saveDora}
                 saving={saving}
               />
             )}

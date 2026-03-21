@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { PRMetrics } from "@/types/github";
 import type { LinearMetrics } from "@/types/linear";
 import type { SlackMetrics } from "@/types/slack";
+import type { DORAMetrics } from "@/types/dora";
 import type { HealthSummary, WeeklyNarrative, ScoreDeduction } from "@/types/metrics";
 import { getConfig } from "@/lib/config";
 
@@ -112,13 +113,15 @@ export async function generateHealthSummary(
   github: PRMetrics | null,
   linear: LinearMetrics | null,
   slack: SlackMetrics | null,
-  scoreResult: { score: number; overallHealth: string; deductions: ScoreDeduction[] }
+  scoreResult: { score: number; overallHealth: string; deductions: ScoreDeduction[] },
+  dora: DORAMetrics | null = null
 ): Promise<HealthSummary> {
-  const ALL_SOURCES = ["GitHub", "Linear", "Slack"];
+  const ALL_SOURCES = ["GitHub", "Linear", "Slack", "DORA"];
   const sources: string[] = [];
   if (github) sources.push("GitHub");
   if (linear) sources.push("Linear");
   if (slack) sources.push("Slack");
+  if (dora && dora.summary.totalDeployments > 0) sources.push("DORA");
   const notConnected = ALL_SOURCES.filter((s) => !sources.includes(s));
 
   // Format the score breakdown for the LLM context
@@ -171,6 +174,15 @@ ${deductionSummary || "  (none — everything looks healthy)"}`;
 - Overload details: ${JSON.stringify(slack.overloadIndicators.filter((o) => o.isOverloaded))}`);
   }
 
+  if (dora && dora.summary.totalDeployments > 0) {
+    sections.push(`DORA Deployment Metrics:
+- Deployment frequency: ${dora.summary.deploymentFrequency}/week (${dora.summary.deploymentFrequencyRating})
+- Change failure rate: ${dora.summary.changeFailureRate}% (${dora.summary.changeFailureRateRating})
+- MTTR: ${dora.summary.mttrHours != null ? dora.summary.mttrHours + "h" : "N/A"} (${dora.summary.mttrRating || "N/A"})
+- Total deployments: ${dora.summary.totalDeployments}
+- Open incidents: ${dora.summary.openIncidents}`);
+  }
+
   const userMessage = `Provide insights and recommendations for these engineering team metrics:\n\n${sections.join("\n\n")}`;
 
   const text = await chatCompletion(system, userMessage, 1024, {
@@ -210,16 +222,18 @@ ${deductionSummary || "  (none — everything looks healthy)"}`;
 export async function generateWeeklyNarrative(
   github: PRMetrics | null,
   linear: LinearMetrics | null,
-  slack: SlackMetrics | null
+  slack: SlackMetrics | null,
+  dora: DORAMetrics | null = null
 ): Promise<WeeklyNarrative> {
   const weekOf = new Date();
   weekOf.setDate(weekOf.getDate() - weekOf.getDay()); // Start of week
 
-  const ALL_SOURCES = ["GitHub", "Linear", "Slack"];
+  const ALL_SOURCES = ["GitHub", "Linear", "Slack", "DORA"];
   const sources: string[] = [];
   if (github) sources.push("GitHub");
   if (linear) sources.push("Linear");
   if (slack) sources.push("Slack");
+  if (dora && dora.summary.totalDeployments > 0) sources.push("DORA");
   const notConnected = ALL_SOURCES.filter((s) => !sources.includes(s));
 
   const system = `You are an engineering team health analyst writing a weekly team health narrative.
@@ -254,6 +268,13 @@ Channel activity: ${JSON.stringify(slack.channelActivity, null, 2)}
 Overload indicators: ${JSON.stringify(slack.overloadIndicators, null, 2)}`);
   }
 
+  if (dora && dora.summary.totalDeployments > 0) {
+    sections.push(`DORA Deployment Metrics:
+Deployment trend: ${JSON.stringify(dora.trend, null, 2)}
+Recent incidents: ${JSON.stringify(dora.incidents.slice(0, 10), null, 2)}
+Summary: ${JSON.stringify(dora.summary, null, 2)}`);
+  }
+
   const userMessage = `Write a weekly team health narrative based on these metrics:\n\n${sections.join("\n\n")}`;
 
   const text = await chatCompletion(system, userMessage, 2048);
@@ -281,6 +302,7 @@ function stripDisconnectedReferences(text: string, notConnected: string[]): stri
     Slack: ["slack", "communication", "response time", "messages", "overload", "chat"],
     GitHub: ["github", "pull request", "PR", "merge", "cycle time", "review"],
     Linear: ["linear", "sprint", "velocity", "cycle", "backlog", "stalled issue"],
+    DORA: ["dora", "deployment", "deploy", "incident", "recovery", "change failure", "lead time for changes", "mttr"],
   };
 
   const blocked = notConnected.flatMap(

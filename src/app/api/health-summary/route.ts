@@ -1,6 +1,7 @@
 import { fetchGitHubMetrics } from "@/lib/github";
 import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
+import { fetchDORAMetrics } from "@/lib/dora";
 import { generateHealthSummary, isAIConfigured, OllamaNotRunningError } from "@/lib/claude";
 import { computeHealthScore } from "@/lib/scoring";
 import { getConfig } from "@/lib/config";
@@ -14,15 +15,19 @@ export async function GET() {
     const channelIds = channelIdsStr?.split(",").map((id) => id.trim());
 
     // Fetch all sources in parallel, with graceful fallbacks
-    const [github, linear, slack] = await Promise.all([
-      owner && repo && getConfig("GITHUB_TOKEN")
-        ? fetchGitHubMetrics(owner, repo).catch(() => null)
+    const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
+    const [github, linear, slack, dora] = await Promise.all([
+      githubConfigured
+        ? fetchGitHubMetrics(owner!, repo!).catch(() => null)
         : null,
       teamId && getConfig("LINEAR_API_KEY")
         ? fetchLinearMetrics(teamId).catch(() => null)
         : null,
       channelIds && getConfig("SLACK_BOT_TOKEN")
         ? fetchSlackMetrics(channelIds).catch(() => null)
+        : null,
+      githubConfigured
+        ? fetchDORAMetrics(owner!, repo!).catch(() => null)
         : null,
     ]);
 
@@ -38,12 +43,12 @@ export async function GET() {
     }
 
     // Compute deterministic score first
-    const scoreResult = computeHealthScore(github, linear, slack);
+    const scoreResult = computeHealthScore(github, linear, slack, dora);
 
     // If AI is configured, enrich with LLM insights; otherwise return score-only
     if (isAIConfigured()) {
       try {
-        const summary = await generateHealthSummary(github, linear, slack, scoreResult);
+        const summary = await generateHealthSummary(github, linear, slack, scoreResult, dora);
         return Response.json({
           data: summary,
           fetchedAt: new Date().toISOString(),

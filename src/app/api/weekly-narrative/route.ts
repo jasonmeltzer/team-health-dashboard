@@ -1,6 +1,7 @@
 import { fetchGitHubMetrics } from "@/lib/github";
 import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
+import { fetchDORAMetrics } from "@/lib/dora";
 import { generateWeeklyNarrative, isAIConfigured, OllamaNotRunningError } from "@/lib/claude";
 import { getConfig } from "@/lib/config";
 
@@ -16,15 +17,19 @@ export async function GET() {
     const channelIdsStr = getConfig("SLACK_CHANNEL_IDS");
     const channelIds = channelIdsStr?.split(",").map((id) => id.trim());
 
-    const [github, linear, slack] = await Promise.all([
-      owner && repo && getConfig("GITHUB_TOKEN")
-        ? fetchGitHubMetrics(owner, repo).catch(() => null)
+    const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
+    const [github, linear, slack, dora] = await Promise.all([
+      githubConfigured
+        ? fetchGitHubMetrics(owner!, repo!).catch(() => null)
         : null,
       teamId && getConfig("LINEAR_API_KEY")
         ? fetchLinearMetrics(teamId).catch(() => null)
         : null,
       channelIds && getConfig("SLACK_BOT_TOKEN")
         ? fetchSlackMetrics(channelIds).catch(() => null)
+        : null,
+      githubConfigured
+        ? fetchDORAMetrics(owner!, repo!).catch(() => null)
         : null,
     ]);
 
@@ -35,7 +40,7 @@ export async function GET() {
       );
     }
 
-    const narrative = await generateWeeklyNarrative(github, linear, slack);
+    const narrative = await generateWeeklyNarrative(github, linear, slack, dora);
 
     return Response.json({
       data: narrative,

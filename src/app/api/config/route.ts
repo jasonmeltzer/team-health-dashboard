@@ -12,6 +12,9 @@ const ALLOWED_KEYS = new Set([
   "AI_PROVIDER",
   "OLLAMA_BASE_URL",
   "OLLAMA_MODEL",
+  "DORA_DEPLOYMENT_SOURCE",
+  "DORA_ENVIRONMENT",
+  "DORA_INCIDENT_LABELS",
 ]);
 
 export async function GET() {

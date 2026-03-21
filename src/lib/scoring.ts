@@ -9,6 +9,7 @@
 import type { PRMetrics } from "@/types/github";
 import type { LinearMetrics } from "@/types/linear";
 import type { SlackMetrics } from "@/types/slack";
+import type { DORAMetrics } from "@/types/dora";
 import type { ScoreDeduction } from "@/types/metrics";
 
 export type { ScoreDeduction };
@@ -310,18 +311,92 @@ function scoreSlack(slack: SlackMetrics): ScoreDeduction[] {
   return deductions;
 }
 
+/* ─── DORA (max 20 pts) ──────────────────────────────────────────────── */
+
+function scoreDORA(dora: DORAMetrics): ScoreDeduction[] {
+  const deductions: ScoreDeduction[] = [];
+
+  // 1. Deployment frequency (0-5 pts)
+  const freq = dora.summary.deploymentFrequency;
+  let freqPts = 0;
+  if (freq < 0.25) freqPts = 5; // less than monthly
+  else if (freq < 1) freqPts = 3; // less than weekly
+  else if (freq < 2) freqPts = 1;
+  deductions.push({
+    signal: "Deploy frequency",
+    category: "dora",
+    points: freqPts,
+    maxPoints: 5,
+    detail: `${freq}/week avg`,
+  });
+
+  // 2. Lead time (0-5 pts) — uses avgLeadTimeHours if available
+  const lt = dora.summary.avgLeadTimeHours;
+  let ltPts = 0;
+  let ltDetail = "Not available";
+  if (lt != null) {
+    if (lt > 168) ltPts = 5;
+    else if (lt > 72) ltPts = 3;
+    else if (lt > 24) ltPts = 1;
+    ltDetail = `${Math.round(lt)}h avg`;
+  }
+  deductions.push({
+    signal: "Lead time",
+    category: "dora",
+    points: ltPts,
+    maxPoints: lt != null ? 5 : 0,
+    detail: ltDetail,
+  });
+
+  // 3. Change failure rate (0-5 pts)
+  const cfr = dora.summary.changeFailureRate;
+  let cfrPts = 0;
+  if (cfr > 15) cfrPts = 5;
+  else if (cfr > 10) cfrPts = 3;
+  else if (cfr > 5) cfrPts = 1;
+  deductions.push({
+    signal: "Change failure rate",
+    category: "dora",
+    points: cfrPts,
+    maxPoints: 5,
+    detail: `${cfr}%`,
+  });
+
+  // 4. MTTR (0-5 pts)
+  const mttr = dora.summary.mttrHours;
+  let mttrPts = 0;
+  let mttrDetail = "No incidents";
+  if (mttr != null) {
+    if (mttr > 168) mttrPts = 5;
+    else if (mttr > 24) mttrPts = 3;
+    else if (mttr > 4) mttrPts = 1;
+    mttrDetail = `${Math.round(mttr)}h avg recovery`;
+  }
+  deductions.push({
+    signal: "MTTR",
+    category: "dora",
+    points: mttrPts,
+    maxPoints: mttr != null ? 5 : 0,
+    detail: mttrDetail,
+  });
+
+  return deductions;
+}
+
 /* ─── Main ────────────────────────────────────────────────────────────── */
 
 export function computeHealthScore(
   github: PRMetrics | null,
   linear: LinearMetrics | null,
-  slack: SlackMetrics | null
+  slack: SlackMetrics | null,
+  dora: DORAMetrics | null = null
 ): ScoreResult {
   const deductions: ScoreDeduction[] = [];
 
   if (github) deductions.push(...scoreGitHub(github));
   if (linear) deductions.push(...scoreLinear(linear));
   if (slack) deductions.push(...scoreSlack(slack));
+  if (dora && dora.summary.totalDeployments > 0) deductions.push(...scoreDORA(dora));
 
   const totalDeductions = deductions.reduce((s, d) => s + d.points, 0);
   const maxPossible = deductions.reduce((s, d) => s + d.maxPoints, 0);

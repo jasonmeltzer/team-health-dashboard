@@ -1,6 +1,6 @@
 export interface ScoreDeduction {
   signal: string;
-  category: "github" | "linear" | "slack";
+  category: "github" | "linear" | "slack" | "dora";
   points: number;
   maxPoints: number;
   detail: string;
