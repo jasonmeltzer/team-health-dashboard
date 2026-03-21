@@ -1,4 +1,4 @@
-import type { LinearMetrics, VelocityDataPoint, StalledIssue, WorkloadEntry, TimeInStateStats, TimeInStateData, TimeInStateIssue, LeadTimeTrendPoint } from "@/types/linear";
+import type { LinearMetrics, VelocityDataPoint, StalledIssue, WorkloadEntry, TimeInStateStats, TimeInStateData, TimeInStateIssue, LeadTimeTrendPoint, CycleSummary } from "@/types/linear";
 import { daysBetween } from "@/lib/utils";
 import { getConfig } from "@/lib/config";
 
@@ -120,30 +120,46 @@ function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 42): Li
     };
   });
 
-  const activeIssues = currentCycle
-    ? currentCycle.issues.nodes.filter(
-        (i) => i.state.type === "started" || i.state.name.toLowerCase().includes("review")
-      )
-    : [];
-
-  const stalledIssues = findStalledIssues(activeIssues, now);
-
-  // Build workload for current cycle (default view) and per-cycle workloads
-  const workloadDistribution = buildWorkload(
-    currentCycle ? currentCycle.issues.nodes : []
-  );
-
   const availableCycles = cycles.map((c) => ({
     id: c.id,
     name: c.name || `Cycle ${c.number}`,
     isCurrent: c === currentCycle,
   }));
 
+  // Build per-cycle data for all views
   const workloadByCycle: Record<string, WorkloadEntry[]> = {};
+  const timeInStateByCycle: Record<string, TimeInStateData> = {};
+  const stalledIssuesByCycle: Record<string, StalledIssue[]> = {};
+  const summaryByCycle: Record<string, CycleSummary> = {};
+
   for (const cycle of cycles) {
     const name = cycle.name || `Cycle ${cycle.number}`;
-    workloadByCycle[name] = buildWorkload(cycle.issues.nodes);
+    const isCurrent = cycle === currentCycle;
+    // For past cycles, use cycle end date as reference; for current, use now
+    const referenceDate = isCurrent ? now : new Date(cycle.endsAt);
+
+    const issues = cycle.issues.nodes;
+    const activeIssues = issues.filter(
+      (i) => i.state.type === "started" || i.state.name.toLowerCase().includes("review")
+    );
+    const completed = issues.filter((i) => i.state.type === "completed");
+
+    workloadByCycle[name] = buildWorkload(issues);
+    timeInStateByCycle[name] = buildTimeInState(issues, referenceDate);
+    stalledIssuesByCycle[name] = findStalledIssues(activeIssues, referenceDate);
+    summaryByCycle[name] = {
+      progress: Math.round(cycle.progress * 100),
+      activeIssues: activeIssues.length,
+      stalledCount: stalledIssuesByCycle[name].length,
+      completedPoints: completed.reduce((s, i) => s + (i.estimate || 0), 0),
+    };
   }
+
+  // Current cycle defaults for top-level fields (backward compatible)
+  const currentName = currentCycle
+    ? currentCycle.name || `Cycle ${currentCycle.number}`
+    : "No active cycle";
+  const currentSummary = summaryByCycle[currentName];
 
   const avgVelocity =
     velocityTrend.length > 0
@@ -153,26 +169,22 @@ function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 42): Li
         )
       : 0;
 
-  const allCycleIssues = currentCycle ? currentCycle.issues.nodes : [];
-  const timeInState = buildTimeInState(allCycleIssues, now);
-
   return {
     mode: "cycles",
     velocityTrend,
-    stalledIssues,
-    workloadDistribution,
+    stalledIssues: stalledIssuesByCycle[currentName] || [],
+    workloadDistribution: workloadByCycle[currentName] || [],
     availableCycles,
     workloadByCycle,
-    timeInState,
+    timeInState: timeInStateByCycle[currentName] || { stats: [], issues: [], flowEfficiency: 0, leadTimeTrend: [] },
+    timeInStateByCycle,
+    stalledIssuesByCycle,
+    summaryByCycle,
     summary: {
-      currentCycleName: currentCycle
-        ? currentCycle.name || `Cycle ${currentCycle.number}`
-        : "No active cycle",
-      currentCycleProgress: currentCycle
-        ? Math.round(currentCycle.progress * 100)
-        : 0,
-      totalActiveIssues: activeIssues.length,
-      stalledIssueCount: stalledIssues.length,
+      currentCycleName: currentName,
+      currentCycleProgress: currentSummary?.progress ?? 0,
+      totalActiveIssues: currentSummary?.activeIssues ?? 0,
+      stalledIssueCount: currentSummary?.stalledCount ?? 0,
       avgVelocity,
     },
   };
@@ -262,6 +274,9 @@ async function buildContinuousMetrics(teamId: string, lookbackDays: number = 42)
     availableCycles: [],
     workloadByCycle: {},
     timeInState,
+    timeInStateByCycle: {},
+    stalledIssuesByCycle: {},
+    summaryByCycle: {},
     summary: {
       currentCycleName: "Continuous flow",
       currentCycleProgress: 0,

@@ -75,6 +75,13 @@ export interface CycleInfo {
   isCurrent: boolean;
 }
 
+export interface CycleSummary {
+  progress: number;
+  activeIssues: number;
+  stalledCount: number;
+  completedPoints: number;
+}
+
 export interface LinearMetrics {
   mode: "cycles" | "continuous";
   velocityTrend: VelocityDataPoint[];
@@ -83,6 +90,9 @@ export interface LinearMetrics {
   availableCycles: CycleInfo[];
   workloadByCycle: Record<string, WorkloadEntry[]>;
   timeInState: TimeInStateData;
+  timeInStateByCycle: Record<string, TimeInStateData>;
+  stalledIssuesByCycle: Record<string, StalledIssue[]>;
+  summaryByCycle: Record<string, CycleSummary>;
   summary: {
     currentCycleName: string;
     currentCycleProgress: number;

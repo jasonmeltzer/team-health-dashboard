@@ -4,10 +4,12 @@ export function Card({
   children,
   className,
   onClick,
+  title,
 }: {
   children: React.ReactNode;
   className?: string;
   onClick?: () => void;
+  title?: string;
 }) {
   return (
     <div
@@ -16,6 +18,7 @@ export function Card({
         className
       )}
       onClick={onClick}
+      title={title}
     >
       {children}
     </div>

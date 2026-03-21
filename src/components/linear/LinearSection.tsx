@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useApiData } from "@/hooks/useApiData";
-import type { LinearMetrics, WorkloadEntry, CycleInfo } from "@/types/linear";
+import type { LinearMetrics, CycleInfo } from "@/types/linear";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -134,45 +134,12 @@ function CyclePicker({
   );
 }
 
-function mergeWorkloads(
-  workloadByCycle: Record<string, WorkloadEntry[]>,
-  selectedCycles: Set<string>
-): WorkloadEntry[] {
-  const merged = new Map<
-    string,
-    { avatarUrl: string | null; inProgress: number; todo: number; completed: number; totalPoints: number; issues: WorkloadEntry["issues"] }
-  >();
-
-  for (const cycleName of selectedCycles) {
-    const entries = workloadByCycle[cycleName];
-    if (!entries) continue;
-    for (const entry of entries) {
-      const existing = merged.get(entry.assignee) || {
-        avatarUrl: entry.avatarUrl,
-        inProgress: 0,
-        todo: 0,
-        completed: 0,
-        totalPoints: 0,
-        issues: [],
-      };
-      existing.inProgress += entry.inProgress;
-      existing.todo += entry.todo;
-      existing.completed += entry.completed;
-      existing.totalPoints += entry.totalPoints;
-      existing.issues.push(...entry.issues);
-      merged.set(entry.assignee, existing);
-    }
-  }
-
-  return Array.from(merged.entries())
-    .map(([assignee, data]) => ({ assignee, ...data }))
-    .sort((a, b) => b.inProgress + b.todo - (a.inProgress + a.todo));
-}
 
 export function LinearSection({ refreshKey }: { refreshKey: number }) {
   const [viewMode, setViewMode] = useState<ViewMode>("weekly");
   const [sliderDays, setSliderDays] = useState(42);
   const [committedDays, setCommittedDays] = useState(42);
+  const [selectedCycleName, setSelectedCycleName] = useState<string | null>(null);
   const { data, loading, refreshing, error, notConfigured, fetchedAt, refetch } = useApiData<LinearMetrics>(
     `/api/linear?mode=${viewMode}&days=${committedDays}`,
     refreshKey
@@ -235,7 +202,27 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
   if (!data) return null;
 
   const isCycles = data.mode === "cycles";
-  const hasCycleWorkloads = isCycles && data.availableCycles.length > 0;
+  const hasCycles = isCycles && data.availableCycles.length > 0;
+
+  // Resolve selected cycle (default to current)
+  const currentCycleName = data.summary.currentCycleName;
+  const activeCycleName = isCycles && selectedCycleName && data.summaryByCycle[selectedCycleName]
+    ? selectedCycleName
+    : currentCycleName;
+  const isCurrentCycle = activeCycleName === currentCycleName;
+  const isPastCycle = isCycles && !isCurrentCycle;
+
+  // Get data for the selected cycle
+  const cycleSummary = isCycles ? data.summaryByCycle[activeCycleName] : null;
+  const activeTimeInState = isCycles
+    ? data.timeInStateByCycle[activeCycleName] || data.timeInState
+    : data.timeInState;
+  const activeWorkload = isCycles
+    ? data.workloadByCycle[activeCycleName] || data.workloadDistribution
+    : data.workloadDistribution;
+  const activeStalledIssues = isCycles
+    ? data.stalledIssuesByCycle[activeCycleName] || data.stalledIssues
+    : data.stalledIssues;
 
   return (
     <div className="space-y-4">
@@ -243,14 +230,14 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard
-          label={isCycles ? "Current Cycle" : "Mode"}
-          value={data.summary.currentCycleName}
+          label={isCycles ? "Cycle" : "Mode"}
+          value={isCycles ? activeCycleName : data.summary.currentCycleName}
           refreshing={refreshing}
         />
         {isCycles ? (
           <MetricCard
             label="Progress"
-            value={`${data.summary.currentCycleProgress}%`}
+            value={`${cycleSummary?.progress ?? data.summary.currentCycleProgress}%`}
             refreshing={refreshing}
           />
         ) : (
@@ -266,30 +253,64 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
         )}
         <MetricCard
           label="Stalled Issues"
-          value={data.summary.stalledIssueCount}
+          value={cycleSummary?.stalledCount ?? data.summary.stalledIssueCount}
           refreshing={refreshing}
-          onClick={() => {
+          onClick={!isPastCycle ? () => {
             document.getElementById("stalled-issues")?.scrollIntoView({ behavior: "smooth", block: "start" });
-          }}
+          } : undefined}
         />
-        <MetricCard
-          label={isCycles ? "Avg Velocity" : "Avg Throughput"}
-          value={`${data.summary.avgVelocity} pts/${isCycles ? "cycle" : "wk"}`}
-          refreshing={refreshing}
-        />
+        {isCycles ? (
+          <MetricCard
+            label="Active Issues"
+            value={cycleSummary?.activeIssues ?? data.summary.totalActiveIssues}
+            refreshing={refreshing}
+            disabled={isPastCycle}
+            disabledTooltip="Active issues only available for the current cycle"
+            onClick={!isPastCycle ? () => {
+              setRequestedTab("wip");
+              document.getElementById("time-in-state")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            } : undefined}
+          />
+        ) : (
+          <MetricCard
+            label="Avg Throughput"
+            value={`${data.summary.avgVelocity} pts/wk`}
+            refreshing={refreshing}
+          />
+        )}
       </div>
+
+      {hasCycles && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Cycle:</span>
+          <CyclePicker
+            cycles={data.availableCycles}
+            selected={new Set([activeCycleName])}
+            onChange={(s) => {
+              const name = Array.from(s)[0];
+              setSelectedCycleName(name === currentCycleName ? null : name);
+            }}
+          />
+        </div>
+      )}
 
       <Card>
         <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
           {isCycles ? "Sprint Velocity" : "Weekly Throughput"}
         </h3>
-        <VelocityChart data={data.velocityTrend} />
+        <VelocityChart
+          data={data.velocityTrend}
+          selectedCycle={isCycles ? activeCycleName : undefined}
+          onBarClick={isCycles ? (name) => {
+            setSelectedCycleName(name === currentCycleName ? null : name);
+          } : undefined}
+        />
       </Card>
 
       <Card>
         <div id="time-in-state">
           <TimeInState
-            data={data.timeInState}
+            data={activeTimeInState}
             requestedTab={requestedTab}
             onTabActivated={clearRequestedTab}
           />
@@ -297,51 +318,19 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {hasCycleWorkloads ? (
-          <CycleWorkloadCard data={data} />
-        ) : (
-          <Card>
-            <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Workload Distribution
-            </h3>
-            <WorkloadDistribution data={data.workloadDistribution} />
-          </Card>
-        )}
+        <Card>
+          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Workload Distribution
+          </h3>
+          <WorkloadDistribution data={activeWorkload} />
+        </Card>
         <Card>
           <h3 id="stalled-issues" className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Stalled Issues
+            Stalled Issues {isPastCycle && <span className="text-xs font-normal text-zinc-400">(at cycle end)</span>}
           </h3>
-          <StalledIssuesList data={data.stalledIssues} />
+          <StalledIssuesList data={activeStalledIssues} />
         </Card>
       </div>
     </div>
-  );
-}
-
-function CycleWorkloadCard({ data }: { data: LinearMetrics }) {
-  const [selectedCycles, setSelectedCycles] = useState<Set<string>>(() => {
-    const current = data.availableCycles.find((c) => c.isCurrent);
-    return new Set(current ? [current.name] : data.availableCycles.length > 0 ? [data.availableCycles[0].name] : []);
-  });
-
-  const mergedWorkload = useMemo(
-    () => mergeWorkloads(data.workloadByCycle, selectedCycles),
-    [data.workloadByCycle, selectedCycles]
-  );
-
-  return (
-    <Card>
-      <div className="mb-3 space-y-2">
-        <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Workload Distribution
-        </h3>
-        <CyclePicker
-          cycles={data.availableCycles}
-          selected={selectedCycles}
-          onChange={setSelectedCycles}
-        />
-      </div>
-      <WorkloadDistribution data={mergedWorkload} />
-    </Card>
   );
 }
