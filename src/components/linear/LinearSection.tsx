@@ -173,7 +173,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
   const [viewMode, setViewMode] = useState<ViewMode>("weekly");
   const [sliderDays, setSliderDays] = useState(42);
   const [committedDays, setCommittedDays] = useState(42);
-  const { data, loading, error, notConfigured, fetchedAt, refetch } = useApiData<LinearMetrics>(
+  const { data, loading, refreshing, error, notConfigured, fetchedAt, refetch } = useApiData<LinearMetrics>(
     `/api/linear?mode=${viewMode}&days=${committedDays}`,
     refreshKey
   );
@@ -207,7 +207,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
     </div>
   );
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="space-y-4">
         <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} />
@@ -224,7 +224,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
   if (error) {
     return (
       <div>
-        <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} />
+        <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} onRefresh={refetch} />
         <Card>
           <ErrorState message={error} onRetry={refetch} />
         </Card>
@@ -239,22 +239,25 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} timestamp={fetchedAt} />
+      <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} timestamp={fetchedAt} onRefresh={refetch} refreshing={refreshing} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard
           label={isCycles ? "Current Cycle" : "Mode"}
           value={data.summary.currentCycleName}
+          refreshing={refreshing}
         />
         {isCycles ? (
           <MetricCard
             label="Progress"
             value={`${data.summary.currentCycleProgress}%`}
+            refreshing={refreshing}
           />
         ) : (
           <MetricCard
             label="Active Issues"
             value={data.summary.totalActiveIssues}
+            refreshing={refreshing}
             onClick={() => {
               setRequestedTab("wip");
               document.getElementById("time-in-state")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -264,6 +267,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
         <MetricCard
           label="Stalled Issues"
           value={data.summary.stalledIssueCount}
+          refreshing={refreshing}
           onClick={() => {
             document.getElementById("stalled-issues")?.scrollIntoView({ behavior: "smooth", block: "start" });
           }}
@@ -271,6 +275,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
         <MetricCard
           label={isCycles ? "Avg Velocity" : "Avg Throughput"}
           value={`${data.summary.avgVelocity} pts/${isCycles ? "cycle" : "wk"}`}
+          refreshing={refreshing}
         />
       </div>
 

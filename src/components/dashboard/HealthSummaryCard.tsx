@@ -188,7 +188,7 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
 
   if (notConfigured) return null;
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <Card className="col-span-full">
         <div className="flex items-center gap-4">
@@ -248,7 +248,7 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
         : "stroke-red-500";
 
   return (
-    <Card className="col-span-full">
+    <Card className={cn("col-span-full", loading && "animate-pulse")}>
       <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
         {/* Score circle — clickable to show breakdown */}
         <div

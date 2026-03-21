@@ -13,11 +13,13 @@ export function useApiData<T>(url: string, refreshKey: number) {
   const [rateLimited, setRateLimited] = useState(false);
   const [rateLimitReset, setRateLimitReset] = useState<string | null>(null);
 
+  // Derived: true when refetching with existing data (not initial load)
+  const refreshing = loading && data != null;
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setNotConfigured(false);
-    setSetupHint(null);
+    // Don't clear data/notConfigured/setupHint — keep stale values visible during refetch
     setRateLimited(false);
     setRateLimitReset(null);
     try {
@@ -51,5 +53,5 @@ export function useApiData<T>(url: string, refreshKey: number) {
     fetchData();
   }, [fetchData, refreshKey]);
 
-  return { data, loading, error, notConfigured, setupHint, fetchedAt, rateLimited, rateLimitReset, refetch: fetchData };
+  return { data, loading, refreshing, error, notConfigured, setupHint, fetchedAt, rateLimited, rateLimitReset, refetch: fetchData };
 }

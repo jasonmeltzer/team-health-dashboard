@@ -6,7 +6,7 @@ import type { WeeklyNarrative } from "@/types/metrics";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { formatRelativeTime } from "@/lib/utils";
+import { cn, formatRelativeTime } from "@/lib/utils";
 
 type Block =
   | { type: "heading"; text: string }
@@ -128,7 +128,7 @@ export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
 
   if (notConfigured) return null;
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <Card className="col-span-full">
         <Skeleton className="mb-3 h-5 w-48" />
@@ -168,7 +168,7 @@ export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
   if (!data) return null;
 
   return (
-    <Card className="col-span-full">
+    <Card className={cn("col-span-full", loading && "animate-pulse")}>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
           Weekly Summary

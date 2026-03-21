@@ -18,7 +18,7 @@ const SlackIcon = () => (
 );
 
 export function SlackSection({ refreshKey }: { refreshKey: number }) {
-  const { data, loading, error, notConfigured, fetchedAt, refetch } = useApiData<SlackMetrics>(
+  const { data, loading, refreshing, error, notConfigured, fetchedAt, refetch } = useApiData<SlackMetrics>(
     "/api/slack",
     refreshKey
   );
@@ -37,7 +37,7 @@ export function SlackSection({ refreshKey }: { refreshKey: number }) {
     );
   }
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="space-y-4">
         <SectionHeader title="Slack" icon={<SlackIcon />} />
@@ -54,7 +54,7 @@ export function SlackSection({ refreshKey }: { refreshKey: number }) {
   if (error) {
     return (
       <div>
-        <SectionHeader title="Slack" icon={<SlackIcon />} />
+        <SectionHeader title="Slack" icon={<SlackIcon />} onRefresh={refetch} />
         <Card>
           <ErrorState message={error} onRetry={refetch} />
         </Card>
@@ -66,24 +66,28 @@ export function SlackSection({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="Slack" icon={<SlackIcon />} timestamp={fetchedAt} />
+      <SectionHeader title="Slack" icon={<SlackIcon />} timestamp={fetchedAt} onRefresh={refetch} refreshing={refreshing} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard
           label="Messages (7d)"
           value={data.summary.totalMessages7Days}
+          refreshing={refreshing}
         />
         <MetricCard
           label="Avg Response"
           value={`${data.summary.avgResponseMinutes}m`}
+          refreshing={refreshing}
         />
         <MetricCard
           label="Most Active"
           value={data.summary.mostActiveChannel}
+          refreshing={refreshing}
         />
         <MetricCard
           label="Overloaded"
           value={data.summary.potentiallyOverloaded}
+          refreshing={refreshing}
           trend={data.summary.potentiallyOverloaded > 0 ? "up" : "flat"}
         />
       </div>

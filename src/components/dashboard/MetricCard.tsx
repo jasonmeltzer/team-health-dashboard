@@ -6,12 +6,14 @@ export function MetricCard({
   value,
   trend,
   trendLabel,
+  refreshing,
   onClick,
 }: {
   label: string;
   value: string | number;
   trend?: "up" | "down" | "flat";
   trendLabel?: React.ReactNode;
+  refreshing?: boolean;
   onClick?: () => void;
 }) {
   return (
@@ -25,7 +27,10 @@ export function MetricCard({
           <span className="ml-1 text-xs text-zinc-400">↗</span>
         )}
       </p>
-      <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+      <p className={cn(
+        "text-2xl font-bold text-zinc-900 dark:text-zinc-100",
+        refreshing && "animate-pulse text-zinc-400 dark:text-zinc-500"
+      )}>
         {value}
       </p>
       {trend && (

@@ -33,7 +33,7 @@ const LOOKBACK_OPTIONS = [
 
 export function DORASection({ refreshKey }: { refreshKey: number }) {
   const [lookbackDays, setLookbackDays] = useState(30);
-  const { data, loading, error, notConfigured, fetchedAt, rateLimited, rateLimitReset, refetch } =
+  const { data, loading, refreshing, error, notConfigured, fetchedAt, rateLimited, rateLimitReset, refetch } =
     useApiData<DORAMetrics>(
       `/api/dora?lookbackDays=${lookbackDays}`,
       refreshKey
@@ -72,7 +72,7 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
     </div>
   );
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="space-y-4">
         <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} />
@@ -102,7 +102,7 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
   if (error) {
     return (
       <div>
-        <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} />
+        <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} onRefresh={refetch} />
         <Card>
           <ErrorState message={error} onRetry={refetch} />
         </Card>
@@ -116,7 +116,7 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
   if (data.summary.totalDeployments === 0 && data.incidents.length === 0) {
     return (
       <div className="space-y-4">
-        <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} />
+        <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} onRefresh={refetch} refreshing={refreshing} />
         <Card>
           <p className="text-sm text-zinc-500">
             No deployments, releases, or merged PRs found in the last {lookbackDays} days.
@@ -134,12 +134,13 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} />
+      <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} onRefresh={refetch} refreshing={refreshing} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard
           label="Deploy Freq"
           value={`${s.deploymentFrequency}/wk`}
+          refreshing={refreshing}
           trendLabel={
             <DORARatingBadge rating={s.deploymentFrequencyRating} />
           }
@@ -151,6 +152,7 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
               ? `${Math.round(s.avgLeadTimeHours)}h`
               : "N/A"
           }
+          refreshing={refreshing}
           trendLabel={
             s.leadTimeRating ? (
               <DORARatingBadge rating={s.leadTimeRating} />
@@ -160,6 +162,7 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
         <MetricCard
           label="Change Failure"
           value={`${s.changeFailureRate}%`}
+          refreshing={refreshing}
           trendLabel={
             <DORARatingBadge rating={s.changeFailureRateRating} />
           }
@@ -167,6 +170,7 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
         <MetricCard
           label="MTTR"
           value={s.mttrHours != null ? `${Math.round(s.mttrHours)}h` : "N/A"}
+          refreshing={refreshing}
           trendLabel={
             s.mttrRating ? (
               <DORARatingBadge rating={s.mttrRating} />

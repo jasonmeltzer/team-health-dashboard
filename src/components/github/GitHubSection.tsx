@@ -39,7 +39,7 @@ const LOOKBACK_OPTIONS = [
 export function GitHubSection({ refreshKey }: { refreshKey: number }) {
   const [staleDays, setStaleDays] = useState(7);
   const [lookbackDays, setLookbackDays] = useState(30);
-  const { data, loading, error, notConfigured, fetchedAt, rateLimited, rateLimitReset, refetch } = useApiData<PRMetrics>(
+  const { data, loading, refreshing, error, notConfigured, fetchedAt, rateLimited, rateLimitReset, refetch } = useApiData<PRMetrics>(
     `/api/github?staleDays=${staleDays}&lookbackDays=${lookbackDays}`,
     refreshKey
   );
@@ -101,7 +101,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
     </div>
   );
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="space-y-4">
         <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} />
@@ -129,7 +129,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
   if (error) {
     return (
       <div>
-        <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} />
+        <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} onRefresh={refetch} />
         <Card>
           <ErrorState message={error} onRetry={refetch} />
         </Card>
@@ -141,12 +141,13 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} timestamp={fetchedAt} />
+      <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} timestamp={fetchedAt} onRefresh={refetch} refreshing={refreshing} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard
           label="Open PRs"
           value={data.summary.totalOpenPRs}
+          refreshing={refreshing}
           onClick={() => {
             document.getElementById("open-prs")?.scrollIntoView({ behavior: "smooth", block: "start" });
           }}
@@ -154,10 +155,12 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
         <MetricCard
           label="Avg Cycle Time"
           value={`${data.summary.avgCycleTimeHours}h`}
+          refreshing={refreshing}
         />
         <MetricCard
           label="Stale PRs"
           value={data.summary.stalePRCount}
+          refreshing={refreshing}
           onClick={() => {
             document.getElementById("stale-prs")?.scrollIntoView({ behavior: "smooth", block: "start" });
           }}
@@ -165,6 +168,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
         <MetricCard
           label="Needs Review"
           value={data.summary.prsNeedingReview}
+          refreshing={refreshing}
           onClick={() => {
             document.getElementById("open-prs")?.scrollIntoView({ behavior: "smooth", block: "start" });
           }}
