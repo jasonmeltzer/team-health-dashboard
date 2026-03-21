@@ -6,6 +6,7 @@ import type { WeeklyNarrative } from "@/types/metrics";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { formatRelativeTime } from "@/lib/utils";
 
 type Block =
   | { type: "heading"; text: string }
@@ -172,7 +173,14 @@ export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
         <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
           Weekly Summary
         </h2>
-        <span className="text-xs text-zinc-500">Week of {data.weekOf}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-zinc-500">Week of {data.weekOf}</span>
+          {data.generatedAt && (
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">
+              Updated {formatRelativeTime(data.generatedAt)}
+            </span>
+          )}
+        </div>
       </div>
       <div className="space-y-3 text-sm text-zinc-700 dark:text-zinc-300">
         {parseNarrative(data.narrative).map((block, i) => {

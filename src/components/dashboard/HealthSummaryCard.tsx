@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { cn } from "@/lib/utils";
+import { cn, formatRelativeTime } from "@/lib/utils";
 
 function ScoreInfo() {
   const [open, setOpen] = useState(false);
@@ -282,6 +282,11 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
               {data.overallHealth.charAt(0).toUpperCase() +
                 data.overallHealth.slice(1)}
             </Badge>
+            {data.generatedAt && (
+              <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                Updated {formatRelativeTime(data.generatedAt)}
+              </span>
+            )}
           </div>
 
           <ul className="space-y-1">

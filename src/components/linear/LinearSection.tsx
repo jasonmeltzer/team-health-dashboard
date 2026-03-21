@@ -173,7 +173,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
   const [viewMode, setViewMode] = useState<ViewMode>("weekly");
   const [sliderDays, setSliderDays] = useState(42);
   const [committedDays, setCommittedDays] = useState(42);
-  const { data, loading, error, notConfigured, refetch } = useApiData<LinearMetrics>(
+  const { data, loading, error, notConfigured, fetchedAt, refetch } = useApiData<LinearMetrics>(
     `/api/linear?mode=${viewMode}&days=${committedDays}`,
     refreshKey
   );
@@ -239,7 +239,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} />
+      <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} timestamp={fetchedAt} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard

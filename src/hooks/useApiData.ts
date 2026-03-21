@@ -9,6 +9,7 @@ export function useApiData<T>(url: string, refreshKey: number) {
   const [error, setError] = useState<string | null>(null);
   const [notConfigured, setNotConfigured] = useState(false);
   const [setupHint, setSetupHint] = useState<string | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -29,6 +30,7 @@ export function useApiData<T>(url: string, refreshKey: number) {
       }
       if (json.error) throw new Error(json.error);
       setData(json.data ?? null);
+      setFetchedAt(json.fetchedAt ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -40,5 +42,5 @@ export function useApiData<T>(url: string, refreshKey: number) {
     fetchData();
   }, [fetchData, refreshKey]);
 
-  return { data, loading, error, notConfigured, setupHint, refetch: fetchData };
+  return { data, loading, error, notConfigured, setupHint, fetchedAt, refetch: fetchData };
 }
