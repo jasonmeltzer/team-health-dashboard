@@ -97,13 +97,8 @@ function CyclePicker({
   onChange: (selected: Set<string>) => void;
 }) {
   const toggle = (name: string) => {
-    const next = new Set(selected);
-    if (next.has(name)) {
-      if (next.size > 1) next.delete(name); // keep at least one selected
-    } else {
-      next.add(name);
-    }
-    onChange(next);
+    // Single-select: always switch to the clicked cycle
+    onChange(new Set([name]));
   };
 
   return (
