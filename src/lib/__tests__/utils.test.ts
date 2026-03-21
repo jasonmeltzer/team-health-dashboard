@@ -13,8 +13,8 @@ import {
 
 describe("getISOWeek", () => {
   it("returns correct ISO week for a known date", () => {
-    // Verify against the actual implementation output
-    const result = getISOWeek(new Date("2026-01-05"));
+    // Jan 1, 2026 is a Thursday → ISO week 1
+    const result = getISOWeek(new Date(2026, 0, 1));
     expect(result).toMatch(/^\d{4}-W\d{2}$/);
     expect(result).toBe("2026-W01");
   });
