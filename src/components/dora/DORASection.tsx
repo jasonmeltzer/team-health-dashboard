@@ -10,7 +10,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { RateLimitState } from "@/components/ui/RateLimitState";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { DORARatingBadge } from "./DORARatingBadge";
-import { DeploymentFrequencyChart } from "./DeploymentFrequencyChart";
+import { DeploymentFrequencyChart, type DeployFilter } from "./DeploymentFrequencyChart";
 import { LeadTimeTrend } from "./LeadTimeTrend";
 import { DeploymentHistory } from "./DeploymentHistory";
 import { IncidentsList } from "./IncidentsList";
@@ -33,6 +33,7 @@ const LOOKBACK_OPTIONS = [
 
 export function DORASection({ refreshKey }: { refreshKey: number }) {
   const [lookbackDays, setLookbackDays] = useState(30);
+  const [deployFilter, setDeployFilter] = useState<DeployFilter>(null);
   const { data, loading, refreshing, error, notConfigured, fetchedAt, rateLimited, rateLimitReset, refetch } =
     useApiData<DORAMetrics>(
       `/api/dora?lookbackDays=${lookbackDays}`,
@@ -179,11 +180,11 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
         />
       </div>
 
-      <DeploymentFrequencyChart data={data.trend} />
+      <DeploymentFrequencyChart data={data.trend} filter={deployFilter} onBarClick={setDeployFilter} />
       <LeadTimeTrend data={data.trend} />
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <DeploymentHistory deployments={data.deployments} />
+        <DeploymentHistory deployments={data.deployments} filter={deployFilter} onClearFilter={() => setDeployFilter(null)} />
         <IncidentsList incidents={data.incidents} />
       </div>
     </div>

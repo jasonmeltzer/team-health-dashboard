@@ -137,14 +137,16 @@ async function fetchDeployments(
     return deploysToCheck.map((d, i) => {
       const statusResult = statusResults[i];
       let status: DeploymentRecord["status"] = "pending";
+      let logUrl: string | null = null;
       if (statusResult.status === "fulfilled") {
         const statuses = statusResult.value.data;
         if (statuses.length > 0) {
           const s = statuses[0].state;
-          if (s === "success") status = "success";
+          if (s === "success" || s === "inactive") status = "success"; // inactive = superseded by a newer deploy, still a success
           else if (s === "failure") status = "failure";
           else if (s === "error") status = "error";
-          else if (s === "inactive") status = "inactive";
+          // log_url typically points to the Actions run
+          logUrl = statuses[0].log_url || null;
         }
       }
 
@@ -155,7 +157,7 @@ async function fetchDeployments(
         ref: d.ref,
         createdAt: d.created_at,
         status,
-        url: d.url,
+        url: logUrl || `https://github.com/${owner}/${repo}/commit/${d.sha}`,
         creator: d.creator?.login || "unknown",
         description: d.description || null,
         causedIncident: false,
@@ -482,7 +484,7 @@ function computeTrend(
     } else if (d.status === "success") {
       entry.success++;
     } else {
-      entry.other++; // pending, inactive
+      entry.other++; // pending
     }
     weekMap.set(week, entry);
   }

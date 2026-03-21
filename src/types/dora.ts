@@ -6,7 +6,7 @@ export interface DeploymentRecord {
   sha: string;
   ref: string;
   createdAt: string;
-  status: "success" | "failure" | "error" | "pending" | "inactive";
+  status: "success" | "failure" | "error" | "pending";
   url: string;
   creator: string;
   description: string | null;
@@ -28,7 +28,7 @@ export interface DORADataPoint {
   deploymentCount: number;
   successCount: number;
   failureCount: number;
-  otherCount: number; // pending, inactive, etc.
+  otherCount: number; // pending
   avgLeadTimeHours: number | null;
   changeFailureRate: number; // percentage 0-100
   mttrHours: number | null;
