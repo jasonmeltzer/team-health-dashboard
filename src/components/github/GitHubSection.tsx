@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { RateLimitState } from "@/components/ui/RateLimitState";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { cn } from "@/lib/utils";
 import { CycleTimeChart } from "./CycleTimeChart";
@@ -38,7 +39,7 @@ const LOOKBACK_OPTIONS = [
 export function GitHubSection({ refreshKey }: { refreshKey: number }) {
   const [staleDays, setStaleDays] = useState(7);
   const [lookbackDays, setLookbackDays] = useState(30);
-  const { data, loading, error, notConfigured, fetchedAt, refetch } = useApiData<PRMetrics>(
+  const { data, loading, error, notConfigured, fetchedAt, rateLimited, rateLimitReset, refetch } = useApiData<PRMetrics>(
     `/api/github?staleDays=${staleDays}&lookbackDays=${lookbackDays}`,
     refreshKey
   );
@@ -110,6 +111,17 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
           ))}
         </div>
         <Skeleton className="h-64" />
+      </div>
+    );
+  }
+
+  if (rateLimited) {
+    return (
+      <div>
+        <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} />
+        <Card>
+          <RateLimitState resetAt={rateLimitReset} onRetry={refetch} />
+        </Card>
       </div>
     );
   }

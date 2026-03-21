@@ -55,6 +55,13 @@ export function DeploymentFrequencyChart({
             radius={[0, 0, 0, 0]}
           />
           <Bar
+            dataKey="otherCount"
+            name="Pending/Inactive"
+            stackId="a"
+            fill="#a1a1aa"
+            radius={[0, 0, 0, 0]}
+          />
+          <Bar
             dataKey="failureCount"
             name="Failed"
             stackId="a"

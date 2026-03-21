@@ -28,6 +28,7 @@ export interface DORADataPoint {
   deploymentCount: number;
   successCount: number;
   failureCount: number;
+  otherCount: number; // pending, inactive, etc.
   avgLeadTimeHours: number | null;
   changeFailureRate: number; // percentage 0-100
   mttrHours: number | null;
@@ -52,5 +53,5 @@ export interface DORAMetrics {
   deployments: DeploymentRecord[];
   incidents: IncidentRecord[];
   summary: DORASummary;
-  source: "deployments" | "releases";
+  source: "deployments" | "releases" | "merges";
 }

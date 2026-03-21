@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { fetchGitHubMetrics } from "@/lib/github";
 import { getConfig } from "@/lib/config";
+import { asRateLimitError } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,6 +23,14 @@ export async function GET(request: NextRequest) {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
+    const rateLimit = asRateLimitError(error);
+    if (rateLimit) {
+      return Response.json({
+        rateLimited: true,
+        rateLimitReset: rateLimit.resetAt.toISOString(),
+        error: rateLimit.message,
+      }, { status: 429 });
+    }
     const message =
       error instanceof Error ? error.message : "Failed to fetch GitHub metrics";
     return Response.json({ error: message }, { status: 500 });

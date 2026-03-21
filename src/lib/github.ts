@@ -9,7 +9,11 @@ export async function fetchGitHubMetrics(
   staleDays: number = 7,
   lookbackDays: number = 30
 ): Promise<PRMetrics> {
-  const octokit = new Octokit({ auth: getConfig("GITHUB_TOKEN") });
+  const octokit = new Octokit({
+    auth: getConfig("GITHUB_TOKEN"),
+    retry: { enabled: false },
+    throttle: { enabled: false },
+  });
   const since = daysAgo(lookbackDays).toISOString();
 
   // Paginate PRs sorted by updated desc, stopping when PRs fall outside

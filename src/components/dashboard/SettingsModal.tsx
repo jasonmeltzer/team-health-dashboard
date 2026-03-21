@@ -282,8 +282,8 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                     placeholder: "auto",
                     value: doraSettings.source,
                     onChange: (v) => setDoraSettings((s) => ({ ...s, source: v })),
-                    hint: "auto, deployments, or releases",
-                    help: "Controls where deployment data comes from:\n- \"auto\" (default): Tries GitHub Deployments API first, falls back to Releases\n- \"deployments\": Only use GitHub Deployments API (for CI/CD workflows)\n- \"releases\": Only use GitHub Releases/tags",
+                    hint: "auto, deployments, releases, or merges",
+                    help: "Controls where deployment data comes from:\n- \"auto\" (default): Tries Deployments → Releases → Merged PRs\n- \"deployments\": Only use GitHub Deployments API (for CI/CD workflows)\n- \"releases\": Only use GitHub Releases/tags\n- \"merges\": Treat every merged PR to the default branch as a deployment (for teams that deploy on merge)",
                   },
                   {
                     label: "Environment",

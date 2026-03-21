@@ -4,4 +4,6 @@ export interface ApiResponse<T> {
   fetchedAt?: string;
   notConfigured?: boolean;
   setupHint?: string;
+  rateLimited?: boolean;
+  rateLimitReset?: string; // ISO timestamp when limit resets
 }

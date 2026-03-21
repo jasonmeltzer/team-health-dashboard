@@ -11,7 +11,7 @@ import { getISOWeek, hoursBetween, daysAgo } from "@/lib/utils";
 import { getConfig } from "@/lib/config";
 
 interface DORAOptions {
-  source?: "deployments" | "releases" | "auto";
+  source?: "deployments" | "releases" | "merges" | "auto";
   environment?: string;
   incidentLabels?: string[];
 }
@@ -22,7 +22,11 @@ export async function fetchDORAMetrics(
   lookbackDays: number = 30,
   options: DORAOptions = {}
 ): Promise<DORAMetrics> {
-  const octokit = new Octokit({ auth: getConfig("GITHUB_TOKEN") });
+  const octokit = new Octokit({
+    auth: getConfig("GITHUB_TOKEN"),
+    retry: { enabled: false },
+    throttle: { enabled: false },
+  });
   const since = daysAgo(lookbackDays);
   const source = options.source || "auto";
   const environment = options.environment || "production";
@@ -32,9 +36,9 @@ export async function fetchDORAMetrics(
     "production-bug",
   ];
 
-  // Fetch deployments or releases
+  // Fetch deployments, releases, or merged PRs
   let deployments: DeploymentRecord[];
-  let usedSource: "deployments" | "releases";
+  let usedSource: "deployments" | "releases" | "merges";
 
   if (source === "releases") {
     deployments = await fetchReleases(octokit, owner, repo, since);
@@ -48,8 +52,11 @@ export async function fetchDORAMetrics(
       environment
     );
     usedSource = "deployments";
+  } else if (source === "merges") {
+    deployments = await fetchMergedPRs(octokit, owner, repo, since);
+    usedSource = "merges";
   } else {
-    // auto: try deployments first, fall back to releases
+    // auto: try deployments → releases → merged PRs
     deployments = await fetchDeployments(
       octokit,
       owner,
@@ -61,7 +68,12 @@ export async function fetchDORAMetrics(
       usedSource = "deployments";
     } else {
       deployments = await fetchReleases(octokit, owner, repo, since);
-      usedSource = "releases";
+      if (deployments.length > 0) {
+        usedSource = "releases";
+      } else {
+        deployments = await fetchMergedPRs(octokit, owner, repo, since);
+        usedSource = "merges";
+      }
     }
   }
 
@@ -186,6 +198,46 @@ async function fetchReleases(
   }
 }
 
+async function fetchMergedPRs(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  since: Date
+): Promise<DeploymentRecord[]> {
+  try {
+    // Get the default branch
+    const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
+    const defaultBranch = repoData.default_branch;
+
+    const { data: pulls } = await octokit.rest.pulls.list({
+      owner,
+      repo,
+      state: "closed",
+      base: defaultBranch,
+      sort: "updated",
+      direction: "desc",
+      per_page: 100,
+    });
+
+    return pulls
+      .filter((pr) => pr.merged_at && new Date(pr.merged_at) >= since)
+      .map((pr) => ({
+        id: String(pr.number),
+        environment: "production",
+        sha: pr.merge_commit_sha || "",
+        ref: defaultBranch,
+        createdAt: pr.merged_at!,
+        status: "success" as const,
+        url: pr.html_url,
+        creator: pr.user?.login || "unknown",
+        description: pr.title,
+        causedIncident: false,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 async function fetchIncidents(
   octokit: Octokit,
   owner: string,
@@ -238,6 +290,7 @@ async function fetchIncidents(
   }
 
   // Detect reverted PRs
+  // MTTR for reverts = time from original PR merge (broken deploy) to revert PR merge (recovery)
   try {
     const { data: pulls } = await octokit.rest.pulls.list({
       owner,
@@ -248,23 +301,54 @@ async function fetchIncidents(
       per_page: 50,
     });
 
-    for (const pr of pulls) {
-      if (!pr.merged_at) continue;
-      if (new Date(pr.merged_at) < since) continue;
-      if (/^revert\s/i.test(pr.title)) {
-        incidents.push({
-          number: pr.number,
-          title: pr.title,
-          url: pr.html_url,
-          labels: ["revert"],
-          createdAt: pr.created_at,
-          closedAt: pr.merged_at,
-          resolutionHours: hoursBetween(
-            new Date(pr.created_at),
-            new Date(pr.merged_at)
-          ),
-        });
+    const revertPRs = pulls.filter(
+      (pr) =>
+        pr.merged_at &&
+        new Date(pr.merged_at) >= since &&
+        /^revert\s/i.test(pr.title)
+    );
+
+    // Try to find original PRs to get accurate incident start times
+    const originalPRResults = await Promise.allSettled(
+      revertPRs.map((pr) => {
+        // GitHub auto-names revert branches "revert-{number}-..."
+        const branchMatch = pr.head?.ref?.match(/^revert-(\d+)-/);
+        if (branchMatch) {
+          return octokit.rest.pulls.get({
+            owner,
+            repo,
+            pull_number: parseInt(branchMatch[1], 10),
+          });
+        }
+        return Promise.reject(new Error("no original PR number in branch"));
+      })
+    );
+
+    for (let i = 0; i < revertPRs.length; i++) {
+      const pr = revertPRs[i];
+      const originalResult = originalPRResults[i];
+
+      // Incident start = original PR merge time (when the broken code went live)
+      // Fallback to revert PR creation time if we can't find the original
+      let incidentStart = new Date(pr.created_at);
+      if (
+        originalResult.status === "fulfilled" &&
+        originalResult.value.data.merged_at
+      ) {
+        incidentStart = new Date(originalResult.value.data.merged_at);
       }
+
+      const revertMergedAt = new Date(pr.merged_at!);
+
+      incidents.push({
+        number: pr.number,
+        title: pr.title,
+        url: pr.html_url,
+        labels: ["revert"],
+        createdAt: incidentStart.toISOString(),
+        closedAt: pr.merged_at,
+        resolutionHours: hoursBetween(incidentStart, revertMergedAt),
+      });
     }
   } catch {
     // Ignore
@@ -378,6 +462,7 @@ function computeTrend(
       total: number;
       success: number;
       failure: number;
+      other: number;
       incidents: IncidentRecord[];
     }
   >();
@@ -388,11 +473,17 @@ function computeTrend(
       total: 0,
       success: 0,
       failure: 0,
+      other: 0,
       incidents: [],
     };
     entry.total++;
-    if (d.status === "success" && !d.causedIncident) entry.success++;
-    else entry.failure++;
+    if (d.status === "failure" || d.status === "error" || d.causedIncident) {
+      entry.failure++;
+    } else if (d.status === "success") {
+      entry.success++;
+    } else {
+      entry.other++; // pending, inactive
+    }
     weekMap.set(week, entry);
   }
 
@@ -414,6 +505,7 @@ function computeTrend(
         deploymentCount: data.total,
         successCount: data.success,
         failureCount: data.failure,
+        otherCount: data.other,
         avgLeadTimeHours: null,
         changeFailureRate:
           data.total > 0

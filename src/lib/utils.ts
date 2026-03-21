@@ -45,6 +45,39 @@ export function minutesBetween(date1: Date, date2: Date): number {
   return Math.round((diffMs / (1000 * 60)) * 10) / 10;
 }
 
+export class GitHubRateLimitError extends Error {
+  resetAt: Date;
+  constructor(resetAt: Date) {
+    const mins = Math.max(1, Math.ceil((resetAt.getTime() - Date.now()) / 60000));
+    super(`GitHub API rate limit exceeded. Resets in ~${mins} minute${mins === 1 ? "" : "s"}.`);
+    this.name = "GitHubRateLimitError";
+    this.resetAt = resetAt;
+  }
+}
+
+export function asRateLimitError(error: unknown): GitHubRateLimitError | null {
+  if (
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    (error as { status: number }).status === 403 &&
+    "message" in error &&
+    typeof (error as { message: string }).message === "string" &&
+    (error as { message: string }).message.toLowerCase().includes("rate limit")
+  ) {
+    let resetAt = new Date(Date.now() + 60 * 60 * 1000); // default: 1h from now
+    if ("response" in error) {
+      const resp = error as { response?: { headers?: Record<string, string> } };
+      const resetHeader = resp.response?.headers?.["x-ratelimit-reset"];
+      if (resetHeader) {
+        resetAt = new Date(parseInt(resetHeader, 10) * 1000);
+      }
+    }
+    return new GitHubRateLimitError(resetAt);
+  }
+  return null;
+}
+
 export function formatRelativeTime(isoString: string): string {
   const now = Date.now();
   const then = new Date(isoString).getTime();

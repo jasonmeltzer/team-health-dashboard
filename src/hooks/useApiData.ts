@@ -10,16 +10,25 @@ export function useApiData<T>(url: string, refreshKey: number) {
   const [notConfigured, setNotConfigured] = useState(false);
   const [setupHint, setSetupHint] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const [rateLimited, setRateLimited] = useState(false);
+  const [rateLimitReset, setRateLimitReset] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     setNotConfigured(false);
     setSetupHint(null);
+    setRateLimited(false);
+    setRateLimitReset(null);
     try {
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json: ApiResponse<T> = await res.json();
+      if (json.rateLimited) {
+        setRateLimited(true);
+        setRateLimitReset(json.rateLimitReset ?? null);
+        return;
+      }
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       if (json.notConfigured) {
         setNotConfigured(true);
         return;
@@ -42,5 +51,5 @@ export function useApiData<T>(url: string, refreshKey: number) {
     fetchData();
   }, [fetchData, refreshKey]);
 
-  return { data, loading, error, notConfigured, setupHint, fetchedAt, refetch: fetchData };
+  return { data, loading, error, notConfigured, setupHint, fetchedAt, rateLimited, rateLimitReset, refetch: fetchData };
 }

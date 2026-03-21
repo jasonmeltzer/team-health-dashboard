@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { fetchDORAMetrics } from "@/lib/dora";
 import { getConfig } from "@/lib/config";
+import { asRateLimitError } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,6 +20,7 @@ export async function GET(request: NextRequest) {
       (getConfig("DORA_DEPLOYMENT_SOURCE") as
         | "deployments"
         | "releases"
+        | "merges"
         | "auto"
         | undefined) || "auto";
     const environment = getConfig("DORA_ENVIRONMENT") || "production";
@@ -38,6 +40,14 @@ export async function GET(request: NextRequest) {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
+    const rateLimit = asRateLimitError(error);
+    if (rateLimit) {
+      return Response.json({
+        rateLimited: true,
+        rateLimitReset: rateLimit.resetAt.toISOString(),
+        error: rateLimit.message,
+      }, { status: 429 });
+    }
     const message =
       error instanceof Error
         ? error.message

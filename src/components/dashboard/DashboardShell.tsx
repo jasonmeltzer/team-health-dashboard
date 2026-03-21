@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { RefreshButton } from "./RefreshButton";
 import { SettingsModal } from "./SettingsModal";
 import { HealthSummaryCard } from "./HealthSummaryCard";
@@ -15,6 +15,21 @@ export function DashboardShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const [poorChoice, setPoorChoice] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleThemeToggle = useCallback(() => {
+    if (theme === "dark") {
+      setPoorChoice(true);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        toggleTheme();
+        setPoorChoice(false);
+      }, 2500);
+    } else {
+      toggleTheme();
+    }
+  }, [theme, toggleTheme]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
@@ -29,8 +44,9 @@ export function DashboardShell() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative" suppressHydrationWarning>
           <button
-            onClick={toggleTheme}
+            onClick={handleThemeToggle}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
             title={theme === "dark" ? "Dark Mode" : "Incorrect Mode"}
           >
@@ -53,6 +69,12 @@ export function DashboardShell() {
             )}
             {theme === "dark" ? "Dark Mode" : "Incorrect Mode"}
           </button>
+          {poorChoice && (
+            <p className="absolute right-0 top-full mt-1 whitespace-nowrap text-xs font-semibold text-red-500">
+              You have chosen... poorly.
+            </p>
+          )}
+          </div>
           <button
             onClick={() => setSettingsOpen(true)}
             className="rounded-lg p-2 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
@@ -82,8 +104,8 @@ export function DashboardShell() {
 
       {/* Data Sections */}
       <GitHubSection refreshKey={refreshKey} />
-      <DORASection refreshKey={refreshKey} />
       <LinearSection refreshKey={refreshKey} />
+      <DORASection refreshKey={refreshKey} />
       <SlackSection refreshKey={refreshKey} />
 
       {/* Weekly Narrative */}
