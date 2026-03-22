@@ -80,7 +80,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
         </div>
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-zinc-400">Stale after</span>
+        <span className="text-xs text-zinc-400">PRs stale after</span>
         <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-0.5 dark:border-zinc-700 dark:bg-zinc-800">
           {STALE_OPTIONS.map((opt) => (
             <button
