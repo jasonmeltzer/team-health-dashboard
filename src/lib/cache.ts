@@ -62,8 +62,10 @@ class InMemoryCacheStore implements CacheStore {
   }
 }
 
-// Singleton cache instance — persists within a single Node.js process
-export const cache: CacheStore = new InMemoryCacheStore();
+// Singleton cache instance — stashed on globalThis so it survives
+// Turbopack/Next.js dev mode module reloads
+const globalForCache = globalThis as typeof globalThis & { __apiCache?: CacheStore };
+export const cache: CacheStore = globalForCache.__apiCache ??= new InMemoryCacheStore();
 
 // Default TTLs per source
 export const CACHE_TTL = {
