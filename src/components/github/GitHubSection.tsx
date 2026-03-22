@@ -39,7 +39,7 @@ const LOOKBACK_OPTIONS = [
 export function GitHubSection({ refreshKey }: { refreshKey: number }) {
   const [staleDays, setStaleDays] = useState(7);
   const [lookbackDays, setLookbackDays] = useState(30);
-  const { data, loading, refreshing, error, notConfigured, fetchedAt, rateLimited, rateLimitReset, refetch } = useApiData<PRMetrics>(
+  const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, rateLimited, rateLimitReset, refetch } = useApiData<PRMetrics>(
     `/api/github?staleDays=${staleDays}&lookbackDays=${lookbackDays}`,
     refreshKey
   );
@@ -80,7 +80,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
         </div>
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-zinc-400">Stale after</span>
+        <span className="text-xs text-zinc-400">PRs stale after</span>
         <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-0.5 dark:border-zinc-700 dark:bg-zinc-800">
           {STALE_OPTIONS.map((opt) => (
             <button
@@ -141,7 +141,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} timestamp={fetchedAt} onRefresh={refetch} refreshing={refreshing} />
+      <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard
@@ -156,6 +156,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
           label="Avg Cycle Time"
           value={`${data.summary.avgCycleTimeHours}h`}
           refreshing={refreshing}
+          tooltip="Average hours from PR creation to merge, across all merged PRs in the lookback period."
         />
         <MetricCard
           label="Stale PRs"

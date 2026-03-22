@@ -288,6 +288,38 @@ Gear icon → modal with sidebar navigation (GitHub, Linear, Slack, DORA, AI sec
 
 ---
 
+## Caching Layer
+
+### Architecture
+
+Server-side in-memory cache with interface-based design for swappable backends.
+
+- **`src/lib/cache.ts`** — `CacheStore` interface, `InMemoryCacheStore` (Map-backed), `getOrFetch<T>()` helper, `buildCacheKey()`, TTL constants
+- **Pattern**: `getOrFetch(key, ttl, fetcher, { force? })` — returns cached value if fresh, calls fetcher if stale, serves expired cache on error (stale-on-error)
+- **Cache keys**: deterministic, parameter-aware (e.g., `github:lookbackDays=30:staleDays=7`)
+
+### TTLs
+
+| Source | TTL | Rationale |
+|--------|-----|-----------|
+| GitHub, Linear, Slack, DORA | 5 min | Data routes — balance freshness vs API load |
+| Health Summary | 10 min | Includes LLM call |
+| Weekly Narrative | 15 min | Expensive LLM generation |
+
+### Key behaviors
+
+- **Force refresh**: Refresh button appends `?force=true`, bypassing cache
+- **Stale-on-error**: Rate limit or network failure serves expired cache if available
+- **Config invalidation**: `POST /api/config` calls `cache.clear()` — new config means stale cache
+- **Auto-cleanup**: Entries removed at 2x TTL to prevent memory growth
+- **UI indicator**: Sections show "(cached)" in amber next to timestamp when serving cached data
+
+### Swapping backends
+
+Implement the `CacheStore` interface (`get`, `set`, `delete`, `clear`) with a different backing store (filesystem, Redis, SQLite). Replace the singleton export in `cache.ts`.
+
+---
+
 ## Frontend Architecture
 
 ### Component Hierarchy
@@ -381,5 +413,5 @@ Rate limit detection is implemented for GitHub and DORA sections. Linear and Sla
 - React hooks must be called before any conditional early returns (Rules of Hooks)
 - Local LLMs (Ollama) frequently ignore prompt instructions — compensated with JSON mode, temperature 0, and post-processing
 - Slack integration has not been verified with a live workspace
-- No caching — every page load re-fetches all APIs
+- Server-side in-memory cache (5min TTL for data routes, 10-15min for AI routes) — lost on restart, no cross-worker sharing
 - No persistence — all data is ephemeral snapshots, no historical trending

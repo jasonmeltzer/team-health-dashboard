@@ -1,7 +1,9 @@
+import { NextRequest } from "next/server";
 import { fetchSlackMetrics } from "@/lib/slack";
 import { getConfig } from "@/lib/config";
+import { getOrFetch, buildCacheKey, CACHE_TTL } from "@/lib/cache";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const channelIdsStr = getConfig("SLACK_CHANNEL_IDS");
 
@@ -10,10 +12,20 @@ export async function GET() {
     }
 
     const channelIds = channelIdsStr.split(",").map((id) => id.trim());
-    const metrics = await fetchSlackMetrics(channelIds);
+    const force = request.nextUrl.searchParams.get("force") === "true";
+
+    const cacheKey = buildCacheKey("slack", {});
+    const result = await getOrFetch(
+      cacheKey,
+      CACHE_TTL.slack,
+      () => fetchSlackMetrics(channelIds),
+      { force }
+    );
+
     return Response.json({
-      data: metrics,
-      fetchedAt: new Date().toISOString(),
+      data: result.value,
+      fetchedAt: result.cachedAt,
+      cached: result.cached,
     });
   } catch (error) {
     const message =

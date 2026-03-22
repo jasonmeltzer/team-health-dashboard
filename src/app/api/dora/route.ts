@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { fetchDORAMetrics } from "@/lib/dora";
 import { getConfig } from "@/lib/config";
 import { asRateLimitError } from "@/lib/utils";
+import { getOrFetch, buildCacheKey, CACHE_TTL } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,6 +16,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const lookbackParam = searchParams.get("lookbackDays");
     const lookbackDays = lookbackParam ? parseInt(lookbackParam, 10) : 30;
+    const force = searchParams.get("force") === "true";
 
     const source =
       (getConfig("DORA_DEPLOYMENT_SOURCE") as
@@ -29,15 +31,23 @@ export async function GET(request: NextRequest) {
       ? labelsRaw.split(",").map((l) => l.trim())
       : undefined;
 
-    const metrics = await fetchDORAMetrics(owner, repo, lookbackDays, {
-      source,
-      environment,
-      incidentLabels,
-    });
+    const cacheKey = buildCacheKey("dora", { lookbackDays });
+    const result = await getOrFetch(
+      cacheKey,
+      CACHE_TTL.dora,
+      () =>
+        fetchDORAMetrics(owner, repo, lookbackDays, {
+          source,
+          environment,
+          incidentLabels,
+        }),
+      { force }
+    );
 
     return Response.json({
-      data: metrics,
-      fetchedAt: new Date().toISOString(),
+      data: result.value,
+      fetchedAt: result.cachedAt,
+      cached: result.cached,
     });
   } catch (error) {
     const rateLimit = asRateLimitError(error);

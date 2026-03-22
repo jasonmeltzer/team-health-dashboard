@@ -1,50 +1,59 @@
+import { NextRequest } from "next/server";
 import { fetchGitHubMetrics } from "@/lib/github";
 import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
 import { fetchDORAMetrics } from "@/lib/dora";
 import { generateWeeklyNarrative, isAIConfigured, OllamaNotRunningError } from "@/lib/claude";
 import { getConfig } from "@/lib/config";
+import { getOrFetch, CACHE_TTL } from "@/lib/cache";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     if (!isAIConfigured()) {
       return Response.json({ notConfigured: true });
     }
 
-    const owner = getConfig("GITHUB_ORG");
-    const repo = getConfig("GITHUB_REPO");
-    const teamId = getConfig("LINEAR_TEAM_ID");
-    const channelIdsStr = getConfig("SLACK_CHANNEL_IDS");
-    const channelIds = channelIdsStr?.split(",").map((id) => id.trim());
+    const force = request.nextUrl.searchParams.get("force") === "true";
 
-    const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
-    const [github, linear, slack, dora] = await Promise.all([
-      githubConfigured
-        ? fetchGitHubMetrics(owner!, repo!).catch(() => null)
-        : null,
-      teamId && getConfig("LINEAR_API_KEY")
-        ? fetchLinearMetrics(teamId).catch(() => null)
-        : null,
-      channelIds && getConfig("SLACK_BOT_TOKEN")
-        ? fetchSlackMetrics(channelIds).catch(() => null)
-        : null,
-      githubConfigured
-        ? fetchDORAMetrics(owner!, repo!).catch(() => null)
-        : null,
-    ]);
+    const result = await getOrFetch(
+      "weekly-narrative",
+      CACHE_TTL.weeklyNarrative,
+      async () => {
+        const owner = getConfig("GITHUB_ORG");
+        const repo = getConfig("GITHUB_REPO");
+        const teamId = getConfig("LINEAR_TEAM_ID");
+        const channelIdsStr = getConfig("SLACK_CHANNEL_IDS");
+        const channelIds = channelIdsStr?.split(",").map((id) => id.trim());
 
-    if (!github && !linear && !slack) {
-      return Response.json(
-        { error: "No data sources available." },
-        { status: 400 }
-      );
-    }
+        const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
+        const [github, linear, slack, dora] = await Promise.all([
+          githubConfigured
+            ? fetchGitHubMetrics(owner!, repo!).catch(() => null)
+            : null,
+          teamId && getConfig("LINEAR_API_KEY")
+            ? fetchLinearMetrics(teamId).catch(() => null)
+            : null,
+          channelIds && getConfig("SLACK_BOT_TOKEN")
+            ? fetchSlackMetrics(channelIds).catch(() => null)
+            : null,
+          githubConfigured
+            ? fetchDORAMetrics(owner!, repo!).catch(() => null)
+            : null,
+        ]);
 
-    const narrative = await generateWeeklyNarrative(github, linear, slack, dora);
+        if (!github && !linear && !slack) {
+          throw new Error("No data sources available.");
+        }
+
+        return await generateWeeklyNarrative(github, linear, slack, dora);
+      },
+      { force }
+    );
 
     return Response.json({
-      data: narrative,
-      fetchedAt: new Date().toISOString(),
+      data: result.value,
+      fetchedAt: result.cachedAt,
+      cached: result.cached,
     });
   } catch (error) {
     if (error instanceof OllamaNotRunningError) {
@@ -54,6 +63,7 @@ export async function GET() {
       error instanceof Error
         ? error.message
         : "Failed to generate weekly narrative";
-    return Response.json({ error: message }, { status: 500 });
+    const status = message.includes("No data sources") ? 400 : 500;
+    return Response.json({ error: message }, { status });
   }
 }
