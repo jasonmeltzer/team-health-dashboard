@@ -1,4 +1,5 @@
 import { getConfigStatus, saveConfig, clearConfigCache } from "@/lib/config";
+import { cache } from "@/lib/cache";
 
 const ALLOWED_KEYS = new Set([
   "GITHUB_TOKEN",
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
 
     saveConfig(filtered);
     clearConfigCache();
+    cache.clear(); // New config invalidates all cached API data
 
     return Response.json({ data: getConfigStatus() });
   } catch (error) {
