@@ -3,6 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { ApiResponse } from "@/types/api";
 
+// Client-side cache: avoids re-fetching when switching back to a previously-seen URL
+const clientCache = new Map<string, { data: unknown; fetchedAt: string; timestamp: number }>();
+const CLIENT_CACHE_TTL = 15 * 60 * 1000; // 15 minutes, matches server TTL
+
 export function useApiData<T>(url: string, refreshKey: number) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,6 +28,19 @@ export function useApiData<T>(url: string, refreshKey: number) {
     // If refreshKey increased, this is a manual refresh — force bypass cache
     const isForceRefresh = refreshKey > prevRefreshKey.current;
     prevRefreshKey.current = refreshKey;
+
+    // Check client-side cache for non-force requests
+    if (!isForceRefresh) {
+      const entry = clientCache.get(url);
+      if (entry && Date.now() - entry.timestamp < CLIENT_CACHE_TTL) {
+        setData(entry.data as T);
+        setFetchedAt(entry.fetchedAt);
+        setCached(true);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+    }
 
     setLoading(true);
     setError(null);
@@ -55,6 +72,15 @@ export function useApiData<T>(url: string, refreshKey: number) {
       setData(json.data ?? null);
       setFetchedAt(json.fetchedAt ?? null);
       setCached(json.cached ?? false);
+
+      // Store in client cache
+      if (json.data && json.fetchedAt) {
+        clientCache.set(url, {
+          data: json.data,
+          fetchedAt: json.fetchedAt,
+          timestamp: Date.now(),
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
