@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { fetchGitHubMetrics } from "@/lib/github";
 import { getConfig } from "@/lib/config";
 import { asRateLimitError } from "@/lib/utils";
+import { getOrFetch, buildCacheKey, CACHE_TTL } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,10 +18,20 @@ export async function GET(request: NextRequest) {
     const staleDays = staleDaysParam ? parseInt(staleDaysParam, 10) : 7;
     const lookbackParam = searchParams.get("lookbackDays");
     const lookbackDays = lookbackParam ? parseInt(lookbackParam, 10) : 30;
-    const metrics = await fetchGitHubMetrics(owner, repo, staleDays, lookbackDays);
+    const force = searchParams.get("force") === "true";
+
+    const cacheKey = buildCacheKey("github", { staleDays, lookbackDays });
+    const result = await getOrFetch(
+      cacheKey,
+      CACHE_TTL.github,
+      () => fetchGitHubMetrics(owner, repo, staleDays, lookbackDays),
+      { force }
+    );
+
     return Response.json({
-      data: metrics,
-      fetchedAt: new Date().toISOString(),
+      data: result.value,
+      fetchedAt: result.cachedAt,
+      cached: result.cached,
     });
   } catch (error) {
     const rateLimit = asRateLimitError(error);
