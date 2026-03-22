@@ -64,7 +64,7 @@ export function VelocityChart({
             fill="#10b981"
             radius={[4, 4, 0, 0]}
             onClick={(entry) => handleClick(entry as unknown as VelocityDataPoint)}
-            activeBar={onBarClick ? { stroke: "#fff", strokeWidth: 2 } : undefined}
+            activeBar={false}
           >
             {selectedCycle && data.map((d) => (
               <Cell
@@ -79,7 +79,7 @@ export function VelocityChart({
             fill="#6366f1"
             radius={[4, 4, 0, 0]}
             onClick={(entry) => handleClick(entry as unknown as VelocityDataPoint)}
-            activeBar={onBarClick ? { stroke: "#fff", strokeWidth: 2 } : undefined}
+            activeBar={false}
           >
             {selectedCycle && data.map((d) => (
               <Cell
