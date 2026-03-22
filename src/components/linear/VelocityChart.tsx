@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   BarChart,
   Bar,
@@ -22,6 +23,9 @@ export function VelocityChart({
   selectedCycle?: string;
   onBarClick?: (cycleName: string) => void;
 }) {
+  // Suppress tooltip briefly after clicking so it doesn't stick
+  const [suppressTooltip, setSuppressTooltip] = useState(false);
+
   if (data.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-zinc-500">
@@ -39,6 +43,8 @@ export function VelocityChart({
           onClick={onBarClick ? (state) => {
             if (state?.activeLabel) {
               onBarClick(String(state.activeLabel));
+              setSuppressTooltip(true);
+              setTimeout(() => setSuppressTooltip(false), 300);
             }
           } : undefined}
         >
@@ -49,18 +55,18 @@ export function VelocityChart({
             stroke="#a1a1aa"
           />
           <YAxis tick={{ fontSize: 12 }} stroke="#a1a1aa" />
-          {!onBarClick && (
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "#18181b",
-                border: "1px solid #3f3f46",
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              itemStyle={{ color: "#fafafa" }}
-              labelStyle={{ color: "#a1a1aa" }}
-            />
-          )}
+          <Tooltip
+            cursor={false}
+            active={suppressTooltip ? false : undefined}
+            contentStyle={{
+              backgroundColor: "#18181b",
+              border: "1px solid #3f3f46",
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+            itemStyle={{ color: "#fafafa" }}
+            labelStyle={{ color: "#a1a1aa" }}
+          />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar
             dataKey="completedPoints"
