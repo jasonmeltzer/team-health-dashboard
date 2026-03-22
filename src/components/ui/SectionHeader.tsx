@@ -5,6 +5,7 @@ export function SectionHeader({
   icon,
   action,
   timestamp,
+  cached,
   onRefresh,
   refreshing,
 }: {
@@ -12,6 +13,7 @@ export function SectionHeader({
   icon: React.ReactNode;
   action?: React.ReactNode;
   timestamp?: string | null;
+  cached?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
 }) {
@@ -25,6 +27,9 @@ export function SectionHeader({
         {timestamp && (
           <span className="text-xs text-zinc-400 dark:text-zinc-500">
             Updated {formatRelativeTime(timestamp)}
+            {cached && (
+              <span className="ml-1 text-amber-500 dark:text-amber-400">(cached)</span>
+            )}
           </span>
         )}
         {onRefresh && (

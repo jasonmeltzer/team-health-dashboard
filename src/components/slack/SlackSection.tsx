@@ -18,7 +18,7 @@ const SlackIcon = () => (
 );
 
 export function SlackSection({ refreshKey }: { refreshKey: number }) {
-  const { data, loading, refreshing, error, notConfigured, fetchedAt, refetch } = useApiData<SlackMetrics>(
+  const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, refetch } = useApiData<SlackMetrics>(
     "/api/slack",
     refreshKey
   );
@@ -66,7 +66,7 @@ export function SlackSection({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="Slack" icon={<SlackIcon />} timestamp={fetchedAt} onRefresh={refetch} refreshing={refreshing} />
+      <SectionHeader title="Slack" icon={<SlackIcon />} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard

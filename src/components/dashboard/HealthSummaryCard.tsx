@@ -181,7 +181,7 @@ function ScoreBreakdown({
 
 export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const { data, loading, error, notConfigured, setupHint, refetch } = useApiData<HealthSummary>(
+  const { data, loading, error, notConfigured, setupHint, cached, refetch } = useApiData<HealthSummary>(
     "/api/health-summary",
     refreshKey
   );
@@ -290,6 +290,9 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
             {data.generatedAt && (
               <span className="text-xs text-zinc-400 dark:text-zinc-500">
                 Updated {formatRelativeTime(data.generatedAt)}
+                {cached && (
+                  <span className="ml-1 text-amber-500 dark:text-amber-400">(cached)</span>
+                )}
               </span>
             )}
           </div>

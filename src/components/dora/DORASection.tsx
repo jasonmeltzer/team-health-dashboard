@@ -34,7 +34,7 @@ const LOOKBACK_OPTIONS = [
 export function DORASection({ refreshKey }: { refreshKey: number }) {
   const [lookbackDays, setLookbackDays] = useState(30);
   const [deployFilter, setDeployFilter] = useState<DeployFilter>(null);
-  const { data, loading, refreshing, error, notConfigured, fetchedAt, rateLimited, rateLimitReset, refetch } =
+  const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, rateLimited, rateLimitReset, refetch } =
     useApiData<DORAMetrics>(
       `/api/dora?lookbackDays=${lookbackDays}`,
       refreshKey
@@ -117,7 +117,7 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
   if (data.summary.totalDeployments === 0 && data.incidents.length === 0) {
     return (
       <div className="space-y-4">
-        <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} onRefresh={refetch} refreshing={refreshing} />
+        <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
         <Card>
           <p className="text-sm text-zinc-500">
             No deployments, releases, or merged PRs found in the last {lookbackDays} days.
@@ -135,7 +135,7 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} onRefresh={refetch} refreshing={refreshing} />
+      <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard

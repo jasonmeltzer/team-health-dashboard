@@ -121,7 +121,7 @@ function RenderSegments({ segments }: { segments: Segment[] }) {
 }
 
 export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
-  const { data, loading, error, notConfigured, setupHint, refetch } = useApiData<WeeklyNarrative>(
+  const { data, loading, error, notConfigured, setupHint, cached, refetch } = useApiData<WeeklyNarrative>(
     "/api/weekly-narrative",
     refreshKey
   );
@@ -178,6 +178,9 @@ export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
           {data.generatedAt && (
             <span className="text-xs text-zinc-400 dark:text-zinc-500">
               Updated {formatRelativeTime(data.generatedAt)}
+              {cached && (
+                <span className="ml-1 text-amber-500 dark:text-amber-400">(cached)</span>
+              )}
             </span>
           )}
         </div>
