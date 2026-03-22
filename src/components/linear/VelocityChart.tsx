@@ -30,14 +30,18 @@ export function VelocityChart({
     );
   }
 
-  const handleClick = (entry: VelocityDataPoint) => {
-    onBarClick?.(entry.cycleName);
-  };
-
   return (
     <div className="h-64">
       <ResponsiveContainer width="100%" height={256} minWidth={0}>
-        <BarChart data={data} className={onBarClick ? "cursor-pointer" : ""}>
+        <BarChart
+          data={data}
+          className={onBarClick ? "cursor-pointer" : ""}
+          onClick={onBarClick ? (state) => {
+            if (state?.activeLabel) {
+              onBarClick(String(state.activeLabel));
+            }
+          } : undefined}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
           <XAxis
             dataKey="cycleName"
@@ -45,26 +49,24 @@ export function VelocityChart({
             stroke="#a1a1aa"
           />
           <YAxis tick={{ fontSize: 12 }} stroke="#a1a1aa" />
-          <Tooltip
-            cursor={false}
-            trigger={onBarClick ? "click" : "hover"}
-            contentStyle={{
-              backgroundColor: "#18181b",
-              border: "1px solid #3f3f46",
-              borderRadius: 8,
-              fontSize: 12,
-            }}
-            itemStyle={{ color: "#fafafa" }}
-            labelStyle={{ color: "#a1a1aa" }}
-          />
+          {!onBarClick && (
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "#18181b",
+                border: "1px solid #3f3f46",
+                borderRadius: 8,
+                fontSize: 12,
+              }}
+              itemStyle={{ color: "#fafafa" }}
+              labelStyle={{ color: "#a1a1aa" }}
+            />
+          )}
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar
             dataKey="completedPoints"
             name="Points completed"
             fill="#10b981"
             radius={[4, 4, 0, 0]}
-            onClick={(entry) => handleClick(entry as unknown as VelocityDataPoint)}
-            activeBar={false}
           >
             {selectedCycle && data.map((d) => (
               <Cell
@@ -78,8 +80,6 @@ export function VelocityChart({
             name="Issues completed"
             fill="#6366f1"
             radius={[4, 4, 0, 0]}
-            onClick={(entry) => handleClick(entry as unknown as VelocityDataPoint)}
-            activeBar={false}
           >
             {selectedCycle && data.map((d) => (
               <Cell
