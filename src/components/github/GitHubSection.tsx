@@ -156,6 +156,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
           label="Avg Cycle Time"
           value={`${data.summary.avgCycleTimeHours}h`}
           refreshing={refreshing}
+          tooltip="Average hours from PR creation to merge, across all merged PRs in the lookback period."
         />
         <MetricCard
           label="Stale PRs"
