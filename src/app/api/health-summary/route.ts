@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { fetchGitHubMetrics } from "@/lib/github";
 import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
@@ -5,88 +6,78 @@ import { fetchDORAMetrics } from "@/lib/dora";
 import { generateHealthSummary, isAIConfigured, OllamaNotRunningError } from "@/lib/claude";
 import { computeHealthScore } from "@/lib/scoring";
 import { getConfig } from "@/lib/config";
+import { getOrFetch, CACHE_TTL } from "@/lib/cache";
 
-export async function GET() {
+interface HealthSummaryData {
+  overallHealth: string;
+  score: number;
+  scoreBreakdown: unknown[];
+  insights: string[];
+  recommendations: string[];
+  generatedAt: string;
+}
+
+export async function GET(request: NextRequest) {
   try {
-    const owner = getConfig("GITHUB_ORG");
-    const repo = getConfig("GITHUB_REPO");
-    const teamId = getConfig("LINEAR_TEAM_ID");
-    const channelIdsStr = getConfig("SLACK_CHANNEL_IDS");
-    const channelIds = channelIdsStr?.split(",").map((id) => id.trim());
+    const force = request.nextUrl.searchParams.get("force") === "true";
 
-    // Fetch all sources in parallel, with graceful fallbacks
-    const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
-    const [github, linear, slack, dora] = await Promise.all([
-      githubConfigured
-        ? fetchGitHubMetrics(owner!, repo!).catch(() => null)
-        : null,
-      teamId && getConfig("LINEAR_API_KEY")
-        ? fetchLinearMetrics(teamId).catch(() => null)
-        : null,
-      channelIds && getConfig("SLACK_BOT_TOKEN")
-        ? fetchSlackMetrics(channelIds).catch(() => null)
-        : null,
-      githubConfigured
-        ? fetchDORAMetrics(owner!, repo!).catch(() => null)
-        : null,
-    ]);
+    const result = await getOrFetch<HealthSummaryData>(
+      "health-summary",
+      CACHE_TTL.healthSummary,
+      async () => {
+        const owner = getConfig("GITHUB_ORG");
+        const repo = getConfig("GITHUB_REPO");
+        const teamId = getConfig("LINEAR_TEAM_ID");
+        const channelIdsStr = getConfig("SLACK_CHANNEL_IDS");
+        const channelIds = channelIdsStr?.split(",").map((id) => id.trim());
 
-    // Need at least one data source
-    if (!github && !linear && !slack) {
-      return Response.json(
-        {
-          error:
-            "No data sources available. Configure at least one of: GitHub, Linear, or Slack.",
-        },
-        { status: 400 }
-      );
-    }
+        const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
+        const [github, linear, slack, dora] = await Promise.all([
+          githubConfigured
+            ? fetchGitHubMetrics(owner!, repo!).catch(() => null)
+            : null,
+          teamId && getConfig("LINEAR_API_KEY")
+            ? fetchLinearMetrics(teamId).catch(() => null)
+            : null,
+          channelIds && getConfig("SLACK_BOT_TOKEN")
+            ? fetchSlackMetrics(channelIds).catch(() => null)
+            : null,
+          githubConfigured
+            ? fetchDORAMetrics(owner!, repo!).catch(() => null)
+            : null,
+        ]);
 
-    // Compute deterministic score first
-    const scoreResult = computeHealthScore(github, linear, slack, dora);
-
-    // If AI is configured, enrich with LLM insights; otherwise return score-only
-    if (isAIConfigured()) {
-      try {
-        const summary = await generateHealthSummary(github, linear, slack, scoreResult, dora);
-        return Response.json({
-          data: summary,
-          fetchedAt: new Date().toISOString(),
-        });
-      } catch (error) {
-        if (error instanceof OllamaNotRunningError) {
-          // AI not reachable — still return the computed score with breakdown as insights
-          return Response.json({
-            data: {
-              overallHealth: scoreResult.overallHealth,
-              score: scoreResult.score,
-              scoreBreakdown: scoreResult.deductions,
-              insights: scoreResult.deductions
-                .filter((d) => d.points > 0)
-                .map((d) => `${d.signal}: ${d.detail}`),
-              recommendations: ["Connect an AI provider (Ollama or Anthropic) for richer insights."],
-              generatedAt: new Date().toISOString(),
-            },
-            fetchedAt: new Date().toISOString(),
-          });
+        if (!github && !linear && !slack) {
+          throw new Error(
+            "No data sources available. Configure at least one of: GitHub, Linear, or Slack."
+          );
         }
-        throw error;
-      }
-    }
 
-    // No AI configured — return score with breakdown as insights
-    return Response.json({
-      data: {
-        overallHealth: scoreResult.overallHealth,
-        score: scoreResult.score,
-        scoreBreakdown: scoreResult.deductions,
-        insights: scoreResult.deductions
-          .filter((d) => d.points > 0)
-          .map((d) => `${d.signal}: ${d.detail}`),
-        recommendations: ["Connect an AI provider (Ollama or Anthropic) for richer insights."],
-        generatedAt: new Date().toISOString(),
+        const scoreResult = computeHealthScore(github, linear, slack, dora);
+
+        if (isAIConfigured()) {
+          const summary = await generateHealthSummary(github, linear, slack, scoreResult, dora);
+          return summary as HealthSummaryData;
+        }
+
+        return {
+          overallHealth: scoreResult.overallHealth,
+          score: scoreResult.score,
+          scoreBreakdown: scoreResult.deductions,
+          insights: scoreResult.deductions
+            .filter((d) => d.points > 0)
+            .map((d) => `${d.signal}: ${d.detail}`),
+          recommendations: ["Connect an AI provider (Ollama or Anthropic) for richer insights."],
+          generatedAt: new Date().toISOString(),
+        };
       },
-      fetchedAt: new Date().toISOString(),
+      { force }
+    );
+
+    return Response.json({
+      data: result.value,
+      fetchedAt: result.cachedAt,
+      cached: result.cached,
     });
   } catch (error) {
     if (error instanceof OllamaNotRunningError) {
@@ -94,6 +85,8 @@ export async function GET() {
     }
     const message =
       error instanceof Error ? error.message : "Failed to generate health summary";
-    return Response.json({ error: message }, { status: 500 });
+    // "No data sources" comes through as an Error now
+    const status = message.includes("No data sources") ? 400 : 500;
+    return Response.json({ error: message }, { status });
   }
 }
