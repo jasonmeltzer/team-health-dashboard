@@ -67,10 +67,10 @@ export const cache: CacheStore = new InMemoryCacheStore();
 
 // Default TTLs per source
 export const CACHE_TTL = {
-  github: 5 * 60 * 1000, // 5 minutes
-  linear: 5 * 60 * 1000, // 5 minutes
-  slack: 5 * 60 * 1000, // 5 minutes
-  dora: 5 * 60 * 1000, // 5 minutes
+  github: 15 * 60 * 1000, // 15 minutes
+  linear: 15 * 60 * 1000, // 15 minutes
+  slack: 15 * 60 * 1000, // 15 minutes
+  dora: 15 * 60 * 1000, // 15 minutes
   healthSummary: 10 * 60 * 1000, // 10 minutes (includes LLM call)
   weeklyNarrative: 15 * 60 * 1000, // 15 minutes (expensive LLM call)
 } as const;
