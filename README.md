@@ -109,7 +109,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Click the gear icon to configure your integrations from the UI.
+Open [http://localhost:5555](http://localhost:5555). Click the gear icon to configure your integrations from the UI.
 
 Alternatively, copy `.env.example` to `.env.local` and fill in your values — env vars take precedence over the in-app settings.
 
@@ -138,7 +138,7 @@ There are two ways to configure integrations:
 | `DORA_DEPLOYMENT_SOURCE` | No | `auto` (default), `deployments`, `releases`, or `merges` |
 | `DORA_ENVIRONMENT` | No | Filter deployments by environment (e.g., `production`) |
 | `DORA_INCIDENT_LABELS` | No | Comma-separated issue labels (default: `incident,hotfix,production-bug`) |
-| `PORT` | No | Dev server port (default: 3000). Must be a shell env var, not in `.env.local` |
+| `PORT` | No | Dev server port (default: 5555). Must be a shell env var, not in `.env.local` |
 
 The dashboard gracefully handles missing integrations — unconfigured sections show placeholders explaining what they provide and how to enable them.
 
@@ -195,7 +195,7 @@ Deploy to any platform that supports Next.js:
 
 - **Vercel**: `npx vercel` (zero-config)
 - **Docker**: `npm run build && npm start`
-- **Any Node.js host**: build and serve on port 3000
+- **Any Node.js host**: build and serve on port 5555
 
 Set environment variables in your deployment platform's settings.
 
