@@ -46,7 +46,8 @@ export function VelocityChart({
           />
           <YAxis tick={{ fontSize: 12 }} stroke="#a1a1aa" />
           <Tooltip
-            cursor={onBarClick ? false : undefined}
+            cursor={false}
+            trigger={onBarClick ? "click" : "hover"}
             contentStyle={{
               backgroundColor: "#18181b",
               border: "1px solid #3f3f46",
