@@ -77,8 +77,9 @@ function scoreGitHub(github: PRMetrics): ScoreDeduction[] {
   let trendPts = 0;
   let trendDetail = "Stable";
   if (trend.length >= 2) {
+    const prior = trend.slice(0, -1);
     const avg =
-      trend.reduce((s, d) => s + d.avgHoursToMerge, 0) / trend.length;
+      prior.reduce((s, d) => s + d.avgHoursToMerge, 0) / prior.length;
     const latest = trend[trend.length - 1].avgHoursToMerge;
     if (avg > 0) {
       const ratio = latest / avg;
@@ -156,8 +157,9 @@ function scoreLinear(linear: LinearMetrics): ScoreDeduction[] {
   let velPts = 0;
   let velDetail = "Stable";
   if (vTrend.length >= 2) {
+    const prior = vTrend.slice(0, -1);
     const avg =
-      vTrend.reduce((s, v) => s + v.completedPoints, 0) / vTrend.length;
+      prior.reduce((s, v) => s + v.completedPoints, 0) / prior.length;
     const latest = vTrend[vTrend.length - 1].completedPoints;
     if (avg > 0) {
       const pct = latest / avg;
@@ -286,8 +288,9 @@ function scoreSlack(slack: SlackMetrics): ScoreDeduction[] {
   let trendPts = 0;
   let trendDetail = "Stable";
   if (trend.length >= 2) {
+    const prior = trend.slice(0, -1);
     const avg =
-      trend.reduce((s, d) => s + d.avgResponseMinutes, 0) / trend.length;
+      prior.reduce((s, d) => s + d.avgResponseMinutes, 0) / prior.length;
     const latest = trend[trend.length - 1].avgResponseMinutes;
     if (avg > 0) {
       const ratio = latest / avg;

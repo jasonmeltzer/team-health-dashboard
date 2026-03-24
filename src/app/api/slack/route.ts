@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const channelIds = channelIdsStr.split(",").map((id) => id.trim());
     const force = request.nextUrl.searchParams.get("force") === "true";
 
-    const cacheKey = buildCacheKey("slack", {});
+    const cacheKey = buildCacheKey("slack", { channels: channelIdsStr });
     const result = await getOrFetch(
       cacheKey,
       CACHE_TTL.slack,

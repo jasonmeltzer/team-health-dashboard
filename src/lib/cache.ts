@@ -91,7 +91,7 @@ export async function getOrFetch<T>(
   key: string,
   ttlMs: number,
   fetcher: () => Promise<T>,
-  options?: { force?: boolean }
+  options?: { force?: boolean; rethrow?: (error: unknown) => boolean }
 ): Promise<GetOrFetchResult<T>> {
   const existing = cache.get<T>(key);
 
@@ -118,6 +118,10 @@ export async function getOrFetch<T>(
       cachedAt: new Date(now).toISOString(),
     };
   } catch (error) {
+    // Always rethrow sentinel errors that callers need to handle
+    if (options?.rethrow?.(error)) {
+      throw error;
+    }
     // Stale-on-error: serve expired cache entry if available
     if (existing) {
       return {

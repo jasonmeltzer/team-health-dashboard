@@ -40,12 +40,22 @@ export function WorkloadDistribution({ data }: { data: WorkloadEntry[] }) {
   }
 
   // Build a map from shortened name back to original for lookup
+  // Use a suffix to disambiguate collisions (e.g. "Alice B." and "Alice B. (2)")
   const shortToFull = new Map<string, string>();
-  data.forEach((d) => shortToFull.set(shortenName(d.assignee), d.assignee));
+  const shortCounts = new Map<string, number>();
+  const assigneeToShort = new Map<string, string>();
+  data.forEach((d) => {
+    let short = shortenName(d.assignee);
+    const count = (shortCounts.get(short) || 0) + 1;
+    shortCounts.set(short, count);
+    if (count > 1) short = `${short} (${count})`;
+    shortToFull.set(short, d.assignee);
+    assigneeToShort.set(d.assignee, short);
+  });
 
   const chartData = data.map((d) => ({
     ...d,
-    assignee: shortenName(d.assignee),
+    assignee: assigneeToShort.get(d.assignee) || shortenName(d.assignee),
   }));
 
   const hasCompleted = data.some((d) => d.completed > 0);

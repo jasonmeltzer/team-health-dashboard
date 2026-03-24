@@ -47,7 +47,7 @@ export function LeadTimeTrend({ data }: { data: DORADataPoint[] }) {
             itemStyle={{ color: "#fafafa" }}
             labelStyle={{ color: "#a1a1aa" }}
             formatter={(value) => [
-              `${Math.round(value as number)}h`,
+              `${Math.round(Number(value))}h`,
               "Avg Lead Time",
             ]}
           />

@@ -38,6 +38,8 @@ export function useApiData<T>(url: string, refreshKey: number) {
         setCached(true);
         setLoading(false);
         setError(null);
+        setNotConfigured(false);
+        setSetupHint(null);
         return;
       }
     }
@@ -70,6 +72,8 @@ export function useApiData<T>(url: string, refreshKey: number) {
       }
       if (json.error) throw new Error(json.error);
       setData(json.data ?? null);
+      setNotConfigured(false);
+      setSetupHint(null);
       setFetchedAt(json.fetchedAt ?? null);
       setCached(json.cached ?? false);
 

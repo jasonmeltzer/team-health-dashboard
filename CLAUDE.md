@@ -52,6 +52,7 @@ src/
 │       ├── linear/route.ts            # Sprint/cycle metrics (velocity, workload, time-in-state)
 │       ├── slack/route.ts             # Communication metrics
 │       ├── config/route.ts            # GET config status / POST save config (Settings UI)
+│       ├── dora/route.ts              # DORA metrics (deploy frequency, lead time, CFR, MTTR)
 │       ├── health-summary/route.ts    # Deterministic score + AI insights
 │       └── weekly-narrative/route.ts  # AI narrative (prose)
 ├── components/
@@ -59,6 +60,7 @@ src/
 │   ├── github/        # GitHubSection, CycleTimeChart, ReviewBottlenecks, StalePRsList, OpenPRsList
 │   ├── linear/        # LinearSection, VelocityChart, StalledIssuesList, WorkloadDistribution, TimeInState
 │   ├── slack/         # SlackSection, ResponseTimeChart, ChannelActivityChart, OverloadIndicators
+│   ├── dora/          # DORASection, DeployFrequencyChart, LeadTimeTrend, ChangeFailureChart, IncidentsList
 │   └── ui/            # Card, Badge, Skeleton, ErrorState, Spinner, SectionHeader
 ├── hooks/useApiData.ts
 ├── lib/
@@ -66,11 +68,13 @@ src/
 │   ├── linear.ts      # Linear GraphQL client
 │   ├── slack.ts       # Slack Web API wrapper
 │   ├── claude.ts      # AI provider abstraction (Anthropic or Ollama) + prompt builders
+│   ├── dora.ts        # DORA metrics (deployments, releases, incidents)
 │   ├── scoring.ts     # Deterministic health score computation
+│   ├── cache.ts       # Server-side cache with stale-on-error and TTL
 │   ├── config.ts      # Dual config reader (env vars + .config.local.json)
 │   └── utils.ts       # Date helpers (daysBetween, hoursBetween, daysAgo, getISOWeek)
 └── types/
-    ├── github.ts, linear.ts, slack.ts, metrics.ts, api.ts
+    ├── github.ts, linear.ts, slack.ts, dora.ts, metrics.ts, api.ts
 ```
 
 ## Health Score
@@ -98,6 +102,12 @@ Starts at 100, subtracts points for signals of trouble. Only scores against conn
 - **Overloaded members** (0-6): count of overloaded. 3+ = -6, 2 = -4, 1 = -2
 - **Response time trend** (0-6): latest vs average. >1.5× = -6, >1.25× = -4, >1.1× = -2
 
+### DORA signals (max 20 pts)
+- **Deploy frequency** (0-5): deploys per week. <0.25 = -5, <1 = -3, <2 = -1
+- **Lead time** (0-5): avg hours (when available). >168h = -5, >72h = -3, >24h = -1. Currently not yet implemented; maxPoints is 0 when null.
+- **Change failure rate** (0-5): percentage of deploys causing incidents. >15% = -5, >10% = -3, >5% = -1
+- **MTTR** (0-5): mean time to recovery in hours. >168h = -5, >24h = -3, >4h = -1. maxPoints is 0 when null.
+
 ### Bands
 - 80-100 = Healthy
 - 60-79 = Warning
@@ -107,7 +117,7 @@ The LLM only generates insights and recommendations based on the data + computed
 
 ## GitHub Section
 
-- **Data source**: `lib/github.ts` — fetches 1 page of 100 PRs (sorted by updated desc), then reviews for up to 30 PRs via `Promise.allSettled`.
+- **Data source**: `lib/github.ts` — paginates PRs (sorted by updated desc, capped at 500) stopping when PRs fall outside the lookback window, then reviews for up to 50 PRs via `Promise.allSettled`.
 - **Configurable lookback period**: 7d / 14d / 30d (default) / 60d / 90d — controls how far back PR data goes.
 - **Configurable stale threshold**: 3d / 5d / 7d (default) / 14d — defines when an open PR is considered stale.
 - **Cycle Time Trend**: line chart by ISO week, shows avg hours to merge and avg hours to first review.
@@ -129,13 +139,21 @@ The LLM only generates insights and recommendations based on the data + computed
   - Trends: lead time trend line chart
   - **Default**: only "started" states shown (In Progress, In Review); others hidden but toggleable
 - **Active Issues metric card**: clicks to scroll to Time in State → Current WIP tab
-- **Workload Distribution**: horizontal stacked bar per assignee. Click a bar to see assigned issues with Linear links. In cycle mode, multi-select cycle picker lets you choose which cycles to view.
+- **Workload Distribution**: horizontal stacked bar per assignee. Click a bar to see assigned issues with Linear links. In cycle mode, single-select cycle picker lets you switch between cycles.
 - **Stalled Issues**: issues with no updates for 5+ days, labeled "Xd no update". Metric card scrolls here.
 
 ## Slack Section
 
 - Communication metrics: response times, channel activity, overload indicators.
 - **Untested** — not yet verified with a real Slack workspace.
+
+## DORA Section
+
+- **Data source**: `lib/dora.ts` — fetches deployment data from GitHub (deployments API, releases, or merged PRs as fallback). Auto-detects source via "auto" mode.
+- **Four DORA metrics**: deployment frequency, lead time for changes (not yet implemented), change failure rate, and mean time to recovery (MTTR).
+- **Incident detection**: labeled issues (incident/hotfix/production-bug) + reverted PRs. Correlates incidents to deployments within a 24h window.
+- **Trend chart**: weekly deployment frequency with success/failure breakdown.
+- **Configurable lookback**: default 30 days.
 
 ## AI Integration
 
@@ -171,8 +189,8 @@ Key variables:
 
 ## Known Constraints
 
-- GitHub fetches a single page of 100 PRs — sufficient for most repos' recent activity but won't cover very high-volume repos.
-- Review data is fetched for up to 30 PRs per request.
+- GitHub paginates PRs up to 500 (capped via `MAX_PRS`), stopping early when PRs fall outside the lookback window.
+- Review data is fetched for up to 50 PRs per request.
 - Recharts Tooltip `formatter` must use `(value) => [...]` without explicit parameter types (type incompatibility).
 - Recharts `activeLabel` is `string | number`, must be cast with `String()`.
 - Always use explicit pixel heights on `ResponsiveContainer` (not `height="100%"`) and `minWidth={0}` to avoid width/height warnings.

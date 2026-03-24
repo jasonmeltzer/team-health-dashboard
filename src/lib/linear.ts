@@ -20,7 +20,7 @@ async function linearQuery<T>(query: string, variables?: Record<string, unknown>
       `Linear GraphQL error: ${json.errors.map((e: { message: string }) => e.message).join("; ")}`
     );
   }
-  if (!res.ok && !json.data) {
+  if (!res.ok) {
     throw new Error(`Linear API error: ${res.status} ${JSON.stringify(json)}`);
   }
   return json.data;
@@ -290,8 +290,8 @@ async function buildContinuousMetrics(teamId: string, lookbackDays: number = 42)
 function getWeekInfo(date: Date): { sortKey: string; label: string } {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
-  const monday = new Date(d.setDate(diff));
+  const diff = day === 0 ? -6 : 1 - day; // offset to Monday
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const sortKey = monday.toISOString().slice(0, 10); // "2026-03-09"
   const label = `${months[monday.getMonth()]} ${monday.getDate()}`;
@@ -329,7 +329,10 @@ function buildTimeInState(issues: LinearIssue[], now: Date): TimeInStateData {
     if (stateType === "started" && issue.startedAt) {
       daysInState = daysBetween(new Date(issue.startedAt), now);
     } else if (stateType === "completed" && issue.completedAt) {
-      daysInState = daysBetween(new Date(issue.completedAt), now);
+      // Time spent in completed state: from last state transition (approximated by updatedAt) to completedAt
+      // Falls back to createdAt→completedAt as total lead time if no better signal
+      const enteredState = issue.startedAt ? new Date(issue.startedAt) : new Date(issue.createdAt);
+      daysInState = daysBetween(enteredState, new Date(issue.completedAt));
     } else {
       daysInState = daysBetween(new Date(issue.updatedAt), now);
     }
@@ -355,7 +358,7 @@ function buildTimeInState(issues: LinearIssue[], now: Date): TimeInStateData {
       days.sort((a, b) => a - b);
       const count = days.length;
       const sum = days.reduce((s, d) => s + d, 0);
-      const p90Index = Math.floor(count * 0.9);
+      const p90Index = Math.ceil(count * 0.9) - 1;
       return {
         state,
         count,

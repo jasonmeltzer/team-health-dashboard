@@ -5,7 +5,7 @@ import { fetchSlackMetrics } from "@/lib/slack";
 import { fetchDORAMetrics } from "@/lib/dora";
 import { generateWeeklyNarrative, isAIConfigured, OllamaNotRunningError } from "@/lib/claude";
 import { getConfig } from "@/lib/config";
-import { getOrFetch, CACHE_TTL } from "@/lib/cache";
+import { getOrFetch, buildCacheKey, CACHE_TTL } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,16 +28,16 @@ export async function GET(request: NextRequest) {
         const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
         const [github, linear, slack, dora] = await Promise.all([
           githubConfigured
-            ? fetchGitHubMetrics(owner!, repo!).catch(() => null)
+            ? getOrFetch(buildCacheKey("github", { staleDays: 7, lookbackDays: 30 }), CACHE_TTL.github, () => fetchGitHubMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
             : null,
           teamId && getConfig("LINEAR_API_KEY")
-            ? fetchLinearMetrics(teamId).catch(() => null)
+            ? getOrFetch(buildCacheKey("linear", { mode: "cycles", days: 42 }), CACHE_TTL.linear, () => fetchLinearMetrics(teamId)).then((r) => r.value).catch(() => null)
             : null,
           channelIds && getConfig("SLACK_BOT_TOKEN")
-            ? fetchSlackMetrics(channelIds).catch(() => null)
+            ? getOrFetch(buildCacheKey("slack", { channels: channelIdsStr }), CACHE_TTL.slack, () => fetchSlackMetrics(channelIds)).then((r) => r.value).catch(() => null)
             : null,
           githubConfigured
-            ? fetchDORAMetrics(owner!, repo!).catch(() => null)
+            ? getOrFetch(buildCacheKey("dora", { lookbackDays: 30 }), CACHE_TTL.dora, () => fetchDORAMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
             : null,
         ]);
 
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
         return await generateWeeklyNarrative(github, linear, slack, dora);
       },
-      { force }
+      { force, rethrow: (e) => e instanceof OllamaNotRunningError }
     );
 
     return Response.json({

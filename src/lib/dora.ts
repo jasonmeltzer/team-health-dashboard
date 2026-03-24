@@ -442,7 +442,7 @@ function computeSummary(
   return {
     deploymentFrequency: Math.round(frequency * 10) / 10,
     deploymentFrequencyRating: rateDORA("frequency", frequency),
-    avgLeadTimeHours: null, // Lead time requires commit-to-deploy tracking; approximate with cycle time
+    avgLeadTimeHours: null, // Lead time requires commit-to-deploy tracking; not yet implemented
     leadTimeRating: null,
     changeFailureRate: Math.round(cfr * 10) / 10,
     changeFailureRateRating: rateDORA("cfr", cfr),

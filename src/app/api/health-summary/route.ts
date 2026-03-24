@@ -4,14 +4,14 @@ import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
 import { fetchDORAMetrics } from "@/lib/dora";
 import { generateHealthSummary, isAIConfigured, OllamaNotRunningError } from "@/lib/claude";
-import { computeHealthScore } from "@/lib/scoring";
+import { computeHealthScore, type ScoreDeduction } from "@/lib/scoring";
 import { getConfig } from "@/lib/config";
-import { getOrFetch, CACHE_TTL } from "@/lib/cache";
+import { getOrFetch, buildCacheKey, CACHE_TTL } from "@/lib/cache";
 
 interface HealthSummaryData {
   overallHealth: string;
   score: number;
-  scoreBreakdown: unknown[];
+  scoreBreakdown: ScoreDeduction[];
   insights: string[];
   recommendations: string[];
   generatedAt: string;
@@ -34,16 +34,16 @@ export async function GET(request: NextRequest) {
         const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
         const [github, linear, slack, dora] = await Promise.all([
           githubConfigured
-            ? fetchGitHubMetrics(owner!, repo!).catch(() => null)
+            ? getOrFetch(buildCacheKey("github", { staleDays: 7, lookbackDays: 30 }), CACHE_TTL.github, () => fetchGitHubMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
             : null,
           teamId && getConfig("LINEAR_API_KEY")
-            ? fetchLinearMetrics(teamId).catch(() => null)
+            ? getOrFetch(buildCacheKey("linear", { mode: "cycles", days: 42 }), CACHE_TTL.linear, () => fetchLinearMetrics(teamId)).then((r) => r.value).catch(() => null)
             : null,
           channelIds && getConfig("SLACK_BOT_TOKEN")
-            ? fetchSlackMetrics(channelIds).catch(() => null)
+            ? getOrFetch(buildCacheKey("slack", { channels: channelIdsStr }), CACHE_TTL.slack, () => fetchSlackMetrics(channelIds)).then((r) => r.value).catch(() => null)
             : null,
           githubConfigured
-            ? fetchDORAMetrics(owner!, repo!).catch(() => null)
+            ? getOrFetch(buildCacheKey("dora", { lookbackDays: 30 }), CACHE_TTL.dora, () => fetchDORAMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
             : null,
         ]);
 
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
           generatedAt: new Date().toISOString(),
         };
       },
-      { force }
+      { force, rethrow: (e) => e instanceof OllamaNotRunningError }
     );
 
     return Response.json({
