@@ -268,14 +268,18 @@ Auto-detected: if `ANTHROPIC_API_KEY` is set, uses Anthropic. Otherwise defaults
 
 3. **Prompt Export** (`/api/ai-prompt?type=health-summary|weekly-narrative`):
    - Generates a self-contained markdown file with instructions + all metrics data
-   - User downloads and pastes into any AI chat (ChatGPT, Claude, Gemini, etc.)
+   - Prompts instruct the AI to create a dated response file (e.g., `health-insights-2026-03-24.json`, `weekly-narrative-2026-03-24.txt`)
+   - Falls back gracefully if the AI cannot create files (returns text instead)
    - Uses rich prompt format with detailed per-item data
+   - After download, a "Next steps" guide appears on the card with exact instructions
 
 4. **Response Import** (`POST /api/ai-response`):
    - Accepts `{ type, response }` — the raw text from the user's AI chat
    - For health-summary: parses JSON, validates structure, merges with current deterministic score
    - For weekly-narrative: takes prose as-is
-   - Stores result in server cache for subsequent loads
+   - Smart quote normalization (curly quotes → straight) for ChatGPT copy-paste compatibility
+   - Stores result in server cache under `manual:*` keys (separate from AI-generated cache)
+   - UI: import modal leads with drag-and-drop file upload zone, with paste-text fallback
 
 ### Graceful Degradation
 

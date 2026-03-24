@@ -185,7 +185,7 @@ src/
 - **No database**: keeps deployment simple. All metrics are computed on each request from the source APIs.
 - **No Linear SDK**: uses raw GraphQL fetch to keep dependencies minimal and queries transparent.
 - **Client-side data fetching**: each dashboard section loads independently, so slower sources (Slack, Claude) don't block the page.
-- **Pluggable AI**: defaults to Ollama (free, local). Anthropic/Claude is available for higher quality with richer prompts. Manual mode lets you use any AI chat (ChatGPT, Claude, Gemini) with no API key — just download a prompt file and import the response.
+- **Pluggable AI**: defaults to Ollama (free, local). Anthropic/Claude is available for higher quality with richer prompts. Manual mode lets you use any AI chat (ChatGPT, Claude, Gemini) with no API key — download a prompt file, upload it to any AI, then drag-and-drop the AI's response file back into the dashboard.
 - **Two config paths**: settings UI for quick setup, env vars for deployment. Env vars always take precedence.
 - **Graceful degradation**: each integration is optional. Unconfigured sections show helpful placeholders. The AI summary works with whatever data sources are configured.
 
