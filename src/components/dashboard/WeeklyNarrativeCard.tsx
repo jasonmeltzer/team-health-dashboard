@@ -1,11 +1,12 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { useApiData } from "@/hooks/useApiData";
 import type { WeeklyNarrative } from "@/types/metrics";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ManualAIResponseModal } from "./ManualAIResponseModal";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 type Block =
@@ -120,6 +121,74 @@ function RenderSegments({ segments }: { segments: Segment[] }) {
   );
 }
 
+function NarrativeManualModeControls({ onImported }: { onImported: () => void }) {
+  const [importOpen, setImportOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [showNextSteps, setShowNextSteps] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch("/api/ai-prompt?type=weekly-narrative");
+      if (!res.ok) throw new Error("Failed to generate prompt file");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `weekly-narrative-prompt-${new Date().toISOString().split("T")[0]}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setShowNextSteps(true);
+    } catch (err) {
+      console.error("Download failed:", err);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        >
+          {downloading ? "Generating..." : "Download Prompt"}
+        </button>
+        <button
+          onClick={() => setImportOpen(true)}
+          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        >
+          Import Response
+        </button>
+      </div>
+      {showNextSteps && (
+        <div className="mt-2 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">
+          <p className="font-medium">Next steps:</p>
+          <ol className="mt-1 list-inside list-decimal space-y-0.5">
+            <li>Upload the downloaded file to any AI chat</li>
+            <li>Tell it: <span className="font-medium">&quot;See file for instructions. Please create a file with your response.&quot;</span></li>
+            <li>Download the AI&apos;s response file (or copy its text)</li>
+            <li>Click <span className="font-medium">Import Response</span> above to upload it here</li>
+          </ol>
+        </div>
+      )}
+      <ManualAIResponseModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        type="weekly-narrative"
+        onImported={() => {
+          setShowNextSteps(false);
+          onImported();
+        }}
+      />
+    </>
+  );
+}
+
 export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
   const { data, loading, error, notConfigured, setupHint, cached, refetch } = useApiData<WeeklyNarrative>(
     "/api/weekly-narrative",
@@ -167,6 +236,23 @@ export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
 
   if (!data) return null;
 
+  // Manual mode with no imported narrative yet
+  if (data.manualMode && !data.narrative) {
+    return (
+      <Card className="col-span-full">
+        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+          Weekly Summary
+        </h2>
+        <p className="mt-2 text-sm text-zinc-500">
+          Export your metrics as a prompt file, paste it into any AI chat (ChatGPT, Claude, Gemini, etc.), then import the response.
+        </p>
+        <div className="mt-4">
+          <NarrativeManualModeControls onImported={refetch} />
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Card className={cn("col-span-full", loading && "animate-pulse")}>
       <div className="mb-3 flex items-center justify-between">
@@ -174,7 +260,9 @@ export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
           Weekly Summary
         </h2>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-zinc-500">Week of {data.weekOf}</span>
+          {data.weekOf && (
+            <span className="text-xs text-zinc-500">Week of {data.weekOf}</span>
+          )}
           {data.generatedAt && (
             <span className="text-xs text-zinc-400 dark:text-zinc-500">
               Updated {formatRelativeTime(data.generatedAt)}
@@ -211,6 +299,12 @@ export function WeeklyNarrativeCard({ refreshKey }: { refreshKey: number }) {
           );
         })}
       </div>
+
+      {data.manualMode && (
+        <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          <NarrativeManualModeControls onImported={refetch} />
+        </div>
+      )}
     </Card>
   );
 }

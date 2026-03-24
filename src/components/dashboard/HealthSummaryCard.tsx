@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ManualAIResponseModal } from "./ManualAIResponseModal";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 function ScoreInfo() {
@@ -179,6 +180,75 @@ function ScoreBreakdown({
   );
 }
 
+function ManualModeControls({ onImported }: { onImported: () => void }) {
+  const [importOpen, setImportOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [showNextSteps, setShowNextSteps] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch("/api/ai-prompt?type=health-summary");
+      if (!res.ok) throw new Error("Failed to generate prompt file");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `team-health-summary-prompt-${new Date().toISOString().split("T")[0]}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setShowNextSteps(true);
+    } catch (err) {
+      console.error("Download failed:", err);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="mt-3 flex items-center gap-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <span className="text-xs text-zinc-400">Manual AI mode:</span>
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        >
+          {downloading ? "Generating..." : "Download Prompt"}
+        </button>
+        <button
+          onClick={() => setImportOpen(true)}
+          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        >
+          Import Response
+        </button>
+      </div>
+      {showNextSteps && (
+        <div className="mt-2 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">
+          <p className="font-medium">Next steps:</p>
+          <ol className="mt-1 list-inside list-decimal space-y-0.5">
+            <li>Upload the downloaded file to any AI chat</li>
+            <li>Tell it: <span className="font-medium">&quot;See file for instructions. Please create a file with your response.&quot;</span></li>
+            <li>Download the AI&apos;s response file (or copy its text)</li>
+            <li>Click <span className="font-medium">Import Response</span> above to upload it here</li>
+          </ol>
+        </div>
+      )}
+      <ManualAIResponseModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        type="health-summary"
+        onImported={() => {
+          setShowNextSteps(false);
+          onImported();
+        }}
+      />
+    </>
+  );
+}
+
 export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const { data, loading, error, notConfigured, setupHint, cached, refetch } = useApiData<HealthSummary>(
@@ -297,36 +367,69 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
             )}
           </div>
 
-          <ul className="space-y-1">
-            {data.insights.map((insight, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-400"
-              >
-                <span className={healthColors[data.overallHealth]}>
-                  {"\u2022"}
-                </span>
-                {insight}
-              </li>
-            ))}
-          </ul>
-
-          {data.recommendations.length > 0 && (
-            <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                Recommendations
-              </p>
+          {/* In manual mode with no imported AI response, show compact score summary + prominent manual controls */}
+          {data.manualMode && data.recommendations.length === 0 ? (
+            <>
+              {data.insights.length > 0 && (
+                <div>
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
+                    Score signals
+                  </p>
+                  <ul className="space-y-0.5">
+                    {data.insights.map((insight, i) => (
+                      <li key={i} className="text-xs text-zinc-500 dark:text-zinc-500">
+                        {insight}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50/50 p-3 dark:border-zinc-700 dark:bg-zinc-800/30">
+                <p className="mb-2 text-sm text-zinc-500">
+                  Export your metrics as a prompt, paste into any AI chat, then import the response for richer insights.
+                </p>
+                <ManualModeControls onImported={refetch} />
+              </div>
+            </>
+          ) : (
+            <>
               <ul className="space-y-1">
-                {data.recommendations.map((rec, i) => (
+                {data.insights.map((insight, i) => (
                   <li
                     key={i}
-                    className="text-sm text-zinc-700 dark:text-zinc-300"
+                    className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-400"
                   >
-                    {i + 1}. {rec}
+                    <span className={healthColors[data.overallHealth]}>
+                      {"\u2022"}
+                    </span>
+                    {insight}
                   </li>
                 ))}
               </ul>
-            </div>
+
+              {data.recommendations.length > 0 && (
+                <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                    Recommendations
+                  </p>
+                  <ul className="space-y-1">
+                    {data.recommendations.map((rec, i) => (
+                      <li
+                        key={i}
+                        className="text-sm text-zinc-700 dark:text-zinc-300"
+                      >
+                        {i + 1}. {rec}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Always show manual controls in manual mode (including after import for re-import) */}
+          {data.manualMode && data.recommendations.length > 0 && (
+            <ManualModeControls onImported={refetch} />
           )}
         </div>
       </div>

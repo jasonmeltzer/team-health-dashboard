@@ -13,10 +13,12 @@ export interface HealthSummary {
   insights: string[];
   recommendations: string[];
   generatedAt: string;
+  manualMode?: boolean;
 }
 
 export interface WeeklyNarrative {
   narrative: string;
   weekOf: string;
   generatedAt: string;
+  manualMode?: boolean;
 }

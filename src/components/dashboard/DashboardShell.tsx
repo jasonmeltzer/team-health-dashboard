@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { RefreshButton } from "./RefreshButton";
 import { SettingsModal } from "./SettingsModal";
+import { clearClientCache } from "@/hooks/useApiData";
 import { HealthSummaryCard } from "./HealthSummaryCard";
 import { WeeklyNarrativeCard } from "./WeeklyNarrativeCard";
 import { GitHubSection } from "@/components/github/GitHubSection";
@@ -96,7 +97,10 @@ export function DashboardShell() {
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        onSaved={() => setRefreshKey((k) => k + 1)}
+        onSaved={() => {
+          clearClientCache();
+          setRefreshKey((k) => k + 1);
+        }}
       />
 
       {/* AI Summary */}

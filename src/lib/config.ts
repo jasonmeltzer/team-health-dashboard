@@ -48,13 +48,15 @@ export function saveConfig(values: ConfigStore) {
 /**
  * Returns which integrations are configured (without exposing secrets).
  */
-export function getConfigStatus(): Record<string, boolean> {
+export function getConfigStatus(): Record<string, boolean | string> {
   const githubConfigured = !!(getConfig("GITHUB_TOKEN") && getConfig("GITHUB_ORG") && getConfig("GITHUB_REPO"));
+  const aiProvider = getConfig("AI_PROVIDER") || (getConfig("ANTHROPIC_API_KEY") ? "anthropic" : "ollama");
   return {
     github: githubConfigured,
     linear: !!(getConfig("LINEAR_API_KEY") && getConfig("LINEAR_TEAM_ID")),
     slack: !!(getConfig("SLACK_BOT_TOKEN") && getConfig("SLACK_CHANNEL_IDS")),
-    ai: !!(getConfig("ANTHROPIC_API_KEY") || getConfig("AI_PROVIDER") === "ollama" || (!getConfig("AI_PROVIDER") && !getConfig("ANTHROPIC_API_KEY"))),
+    ai: aiProvider === "manual" || !!(getConfig("ANTHROPIC_API_KEY") || aiProvider === "ollama"),
+    aiProvider,
     dora: githubConfigured,
   };
 }

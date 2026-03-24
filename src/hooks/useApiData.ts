@@ -7,6 +7,11 @@ import type { ApiResponse } from "@/types/api";
 const clientCache = new Map<string, { data: unknown; fetchedAt: string; timestamp: number }>();
 const CLIENT_CACHE_TTL = 15 * 60 * 1000; // 15 minutes, matches server TTL
 
+/** Clear all client-side cached API responses. Call when config changes. */
+export function clearClientCache() {
+  clientCache.clear();
+}
+
 export function useApiData<T>(url: string, refreshKey: number) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +25,8 @@ export function useApiData<T>(url: string, refreshKey: number) {
 
   // Track previous refreshKey to detect manual refresh (force bypass cache)
   const prevRefreshKey = useRef(refreshKey);
+  // Flag for explicit refetch() calls — bypasses client cache without server force
+  const explicitRefetch = useRef(false);
 
   // Derived: true when refetching with existing data (not initial load)
   const refreshing = loading && data != null;
@@ -29,8 +36,12 @@ export function useApiData<T>(url: string, refreshKey: number) {
     const isForceRefresh = refreshKey > prevRefreshKey.current;
     prevRefreshKey.current = refreshKey;
 
+    // Explicit refetch() calls bypass client cache (but don't force server cache bypass)
+    const skipClientCache = isForceRefresh || explicitRefetch.current;
+    explicitRefetch.current = false;
+
     // Check client-side cache for non-force requests
-    if (!isForceRefresh) {
+    if (!skipClientCache) {
       const entry = clientCache.get(url);
       if (entry && Date.now() - entry.timestamp < CLIENT_CACHE_TTL) {
         setData(entry.data as T);
@@ -64,10 +75,14 @@ export function useApiData<T>(url: string, refreshKey: number) {
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       if (json.notConfigured) {
         setNotConfigured(true);
+        setData(null);
+        setSetupHint(null);
         return;
       }
       if (json.setupHint) {
         setSetupHint(json.setupHint);
+        setData(null);
+        setNotConfigured(false);
         return;
       }
       if (json.error) throw new Error(json.error);
@@ -96,5 +111,10 @@ export function useApiData<T>(url: string, refreshKey: number) {
     fetchData();
   }, [fetchData]);
 
-  return { data, loading, refreshing, error, notConfigured, setupHint, fetchedAt, cached, rateLimited, rateLimitReset, refetch: fetchData };
+  const refetch = useCallback(() => {
+    explicitRefetch.current = true;
+    return fetchData();
+  }, [fetchData]);
+
+  return { data, loading, refreshing, error, notConfigured, setupHint, fetchedAt, cached, rateLimited, rateLimitReset, refetch };
 }

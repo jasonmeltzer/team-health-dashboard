@@ -54,9 +54,11 @@ src/
 │       ├── config/route.ts            # GET config status / POST save config (Settings UI)
 │       ├── dora/route.ts              # DORA metrics (deploy frequency, lead time, CFR, MTTR)
 │       ├── health-summary/route.ts    # Deterministic score + AI insights
-│       └── weekly-narrative/route.ts  # AI narrative (prose)
+│       ├── weekly-narrative/route.ts  # AI narrative (prose)
+│       ├── ai-prompt/route.ts         # GET prompt file for manual AI mode
+│       └── ai-response/route.ts       # POST import AI response from manual mode
 ├── components/
-│   ├── dashboard/     # DashboardShell, HealthSummaryCard, WeeklyNarrativeCard, MetricCard, RefreshButton, SettingsModal
+│   ├── dashboard/     # DashboardShell, HealthSummaryCard, WeeklyNarrativeCard, MetricCard, RefreshButton, SettingsModal, ManualAIResponseModal
 │   ├── github/        # GitHubSection, CycleTimeChart, ReviewBottlenecks, StalePRsList, OpenPRsList
 │   ├── linear/        # LinearSection, VelocityChart, StalledIssuesList, WorkloadDistribution, TimeInState
 │   ├── slack/         # SlackSection, ResponseTimeChart, ChannelActivityChart, OverloadIndicators
@@ -157,10 +159,12 @@ The LLM only generates insights and recommendations based on the data + computed
 
 ## AI Integration
 
-- **Two providers**: Ollama (default, free, local) or Anthropic (paid API key). Configured via `AI_PROVIDER` env var or auto-detected based on presence of `ANTHROPIC_API_KEY`.
+- **Three providers**: Ollama (default, free, local), Anthropic (paid API key), or Manual (any AI chat). Configured via `AI_PROVIDER` env var or auto-detected based on presence of `ANTHROPIC_API_KEY`.
+- **Provider-aware prompts**: Anthropic and Manual mode use rich prompts with detailed per-item data (individual PRs, per-person stats, trend breakdowns). Ollama uses compact summary-level prompts with defensive parsing to accommodate smaller models.
 - **Health Summary** (`/api/health-summary`): computes deterministic score first, then passes data + score to LLM for insights/recommendations only. Works without AI — falls back to score breakdown as insights.
 - **Weekly Narrative** (`/api/weekly-narrative`): full trend data to LLM for prose summary. Post-processing strips hallucinated references to disconnected sources (local models ignore prompt instructions).
-- **JSON mode**: health summary uses `response_format: { type: "json_object" }` with Ollama and temperature 0 for reliable structured output.
+- **Manual AI mode** (`AI_PROVIDER=manual`): No API keys or local software needed. The dashboard exports a self-contained markdown prompt file (`GET /api/ai-prompt?type=health-summary|weekly-narrative`) that users upload to any AI chat (ChatGPT, Claude, Gemini, etc.). Prompts instruct the AI to create a dated response file (e.g., `health-insights-2026-03-24.json`). Users drag-and-drop or upload the response file via the import modal (or paste text as fallback). Smart quote normalization handles ChatGPT copy-paste artifacts. Imported responses are cached under `manual:*` keys (separate from AI-generated cache) and persist across refresh.
+- **JSON mode**: health summary uses `response_format: { type: "json_object" }` with Ollama and temperature 0 for reliable structured output. Anthropic does not need JSON mode — it follows instructions reliably.
 - Both endpoints gracefully degrade if some integrations aren't configured. Only connected source data is sent to the LLM.
 
 ## Settings UI
@@ -179,7 +183,7 @@ See `.env.example` for the full list. Two config paths:
 
 Key variables:
 - `PORT` — Dev server port (default 3000). **Must be a shell env var** (e.g. `PORT=3001 npm run dev`), not in `.env.local`, because Next.js binds the port before loading `.env.local`.
-- `AI_PROVIDER` — `anthropic` or `ollama` (default: `ollama` if no `ANTHROPIC_API_KEY` set)
+- `AI_PROVIDER` — `anthropic`, `ollama`, or `manual` (default: `ollama` if no `ANTHROPIC_API_KEY` set)
 - `ANTHROPIC_API_KEY` — Claude API (only needed for `anthropic` provider)
 - `OLLAMA_BASE_URL` — Ollama server URL (default `http://localhost:11434`)
 - `OLLAMA_MODEL` — Ollama model name (default `llama3`)
