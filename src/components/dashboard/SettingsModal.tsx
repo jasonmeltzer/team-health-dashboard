@@ -44,7 +44,13 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
     try {
       const res = await fetch("/api/config");
       const json = await res.json();
-      if (json.data) setStatus(json.data);
+      if (json.data) {
+        setStatus(json.data);
+        // Sync AI provider selector with current config
+        if (json.data.aiProvider) {
+          setAi((s) => ({ ...s, provider: json.data.aiProvider }));
+        }
+      }
     } catch {
       // ignore
     }
