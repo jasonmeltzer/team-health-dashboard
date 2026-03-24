@@ -79,7 +79,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
         setMessage({ type: "error", text: json.error });
       } else {
         setStatus(json.data);
-        setMessage({ type: "success", text: "Saved! Refresh the dashboard to see changes." });
+        setMessage({ type: "success", text: "Saved!" });
         onSaved();
       }
     } catch {
