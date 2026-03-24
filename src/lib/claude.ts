@@ -530,6 +530,8 @@ export function buildHealthSummaryPromptFile(
   if (slack) dataSections.push(formatSlackRich(slack));
   if (dora && dora.summary.totalDeployments > 0) dataSections.push(formatDORARich(dora));
 
+  const today = new Date().toISOString().split("T")[0];
+
   return `# Team Health Analysis — AI Prompt
 
 > **Instructions:** Upload this file to any AI chat (ChatGPT, Claude, Gemini, etc.)
@@ -545,7 +547,7 @@ You are an engineering team health analyst. Analyze the metrics data below and r
 
 ## Response Format
 
-**Create a downloadable file** named \`health-insights.json\` containing ONLY a JSON object with this exact shape:
+**Create a downloadable file** named \`health-insights-${today}.json\` containing ONLY a JSON object with this exact shape:
 
 \`\`\`
 {"insights":["insight1","insight2",...],"recommendations":["rec1","rec2",...]}
@@ -580,7 +582,7 @@ ${dataSections.join("\n\n---\n\n")}
 
 ---
 
-> **Reminder:** Create a downloadable file named health-insights.json with only the JSON object. If you cannot create files, return the JSON directly as text.
+> **Reminder:** Create a downloadable file named health-insights-${today}.json with only the JSON object. If you cannot create files, return the JSON directly as text.
 `;
 }
 
@@ -598,6 +600,7 @@ export function buildWeeklyNarrativePromptFile(
   if (dora && dora.summary.totalDeployments > 0) sources.push("DORA");
   const notConnected = ALL_SOURCES.filter((s) => !sources.includes(s));
 
+  const today = new Date().toISOString().split("T")[0];
   const weekOf = new Date();
   weekOf.setDate(weekOf.getDate() - weekOf.getDay());
 
@@ -620,7 +623,7 @@ You are an engineering team health analyst. Write a weekly team health narrative
 
 ## Response Format
 
-**Create a downloadable file** named \`weekly-narrative.txt\` containing 3-4 short paragraphs of plain text.
+**Create a downloadable file** named \`weekly-narrative-${today}.txt\` containing 3-4 short paragraphs of plain text.
 
 You may use **bold** for emphasis and markdown headers (## Section) to organize if needed, but keep it concise. No bullet points or numbered lists — write in prose. The file should contain only the narrative text, no preamble.
 
@@ -641,7 +644,7 @@ ${dataSections.join("\n\n---\n\n")}
 
 ---
 
-> **Reminder:** Create a downloadable file named weekly-narrative.txt with prose paragraphs only. If you cannot create files, return the text directly. Be specific, cite numbers, name names.
+> **Reminder:** Create a downloadable file named weekly-narrative-${today}.txt with prose paragraphs only. If you cannot create files, return the text directly. Be specific, cite numbers, name names.
 `;
 }
 

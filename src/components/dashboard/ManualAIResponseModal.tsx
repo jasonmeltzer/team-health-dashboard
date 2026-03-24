@@ -92,7 +92,8 @@ export function ManualAIResponseModal({
 
   const isHealthSummary = type === "health-summary";
   const title = isHealthSummary ? "Import Health Summary" : "Import Weekly Narrative";
-  const expectedFile = isHealthSummary ? "health-insights.json" : "weekly-narrative.txt";
+  const today = new Date().toISOString().split("T")[0];
+  const expectedFile = isHealthSummary ? `health-insights-${today}.json` : `weekly-narrative-${today}.txt`;
   const placeholder = isHealthSummary
     ? '{"insights":["..."],"recommendations":["..."]}'
     : "Paste the narrative text here...";
