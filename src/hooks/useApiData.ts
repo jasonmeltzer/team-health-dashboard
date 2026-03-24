@@ -69,10 +69,14 @@ export function useApiData<T>(url: string, refreshKey: number) {
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       if (json.notConfigured) {
         setNotConfigured(true);
+        setData(null);
+        setSetupHint(null);
         return;
       }
       if (json.setupHint) {
         setSetupHint(json.setupHint);
+        setData(null);
+        setNotConfigured(false);
         return;
       }
       if (json.error) throw new Error(json.error);
