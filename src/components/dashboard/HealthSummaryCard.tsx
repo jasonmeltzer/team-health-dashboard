@@ -183,6 +183,7 @@ function ScoreBreakdown({
 function ManualModeControls({ onImported }: { onImported: () => void }) {
   const [importOpen, setImportOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [showNextSteps, setShowNextSteps] = useState(false);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -198,6 +199,7 @@ function ManualModeControls({ onImported }: { onImported: () => void }) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      setShowNextSteps(true);
     } catch (err) {
       console.error("Download failed:", err);
     } finally {
@@ -223,11 +225,25 @@ function ManualModeControls({ onImported }: { onImported: () => void }) {
           Import Response
         </button>
       </div>
+      {showNextSteps && (
+        <div className="mt-2 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">
+          <p className="font-medium">Next steps:</p>
+          <ol className="mt-1 list-inside list-decimal space-y-0.5">
+            <li>Upload the downloaded file to any AI chat</li>
+            <li>Tell it: <span className="font-medium">&quot;See file for instructions. Please create a file with your response.&quot;</span></li>
+            <li>Download the AI&apos;s response file (or copy its text)</li>
+            <li>Click <span className="font-medium">Import Response</span> above to upload it here</li>
+          </ol>
+        </div>
+      )}
       <ManualAIResponseModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
         type="health-summary"
-        onImported={onImported}
+        onImported={() => {
+          setShowNextSteps(false);
+          onImported();
+        }}
       />
     </>
   );

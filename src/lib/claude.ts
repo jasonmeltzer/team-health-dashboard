@@ -532,9 +532,8 @@ export function buildHealthSummaryPromptFile(
 
   return `# Team Health Analysis — AI Prompt
 
-> **Instructions:** Paste this entire file into any AI chat (ChatGPT, Claude, Gemini, etc.).
-> You can just say "See file for instructions." The AI will analyze your team's metrics and
-> return structured JSON that you can paste back into the dashboard.
+> **Instructions:** Upload this file to any AI chat (ChatGPT, Claude, Gemini, etc.)
+> and say: **"See file for instructions. Please create a file with your response."**
 
 ---
 
@@ -546,7 +545,7 @@ You are an engineering team health analyst. Analyze the metrics data below and r
 
 ## Response Format
 
-Return ONLY a JSON object with this exact shape — no markdown fences, no explanation before or after:
+**Create a downloadable file** named \`health-insights.json\` containing ONLY a JSON object with this exact shape:
 
 \`\`\`
 {"insights":["insight1","insight2",...],"recommendations":["rec1","rec2",...]}
@@ -554,6 +553,7 @@ Return ONLY a JSON object with this exact shape — no markdown fences, no expla
 
 - **insights**: 3-5 strings. Each must cite a specific number from the data. No generic statements.
 - **recommendations**: 2-3 actionable strings. Be specific about what to do and who should do it.
+- The file must contain valid JSON only — no markdown, no commentary, no wrapping.
 
 ## Constraints
 
@@ -580,7 +580,7 @@ ${dataSections.join("\n\n---\n\n")}
 
 ---
 
-> **Reminder:** Return only the JSON object. No markdown, no code fences, no preamble.
+> **Reminder:** Create a downloadable file named health-insights.json with only the JSON object. If you cannot create files, return the JSON directly as text.
 `;
 }
 
@@ -609,9 +609,8 @@ export function buildWeeklyNarrativePromptFile(
 
   return `# Weekly Team Health Narrative — AI Prompt
 
-> **Instructions:** Paste this entire file into any AI chat (ChatGPT, Claude, Gemini, etc.).
-> You can just say "See file for instructions." The AI will write a narrative summary that
-> you can paste back into the dashboard.
+> **Instructions:** Upload this file to any AI chat (ChatGPT, Claude, Gemini, etc.)
+> and say: **"See file for instructions. Please create a file with your response."**
 
 ---
 
@@ -621,9 +620,9 @@ You are an engineering team health analyst. Write a weekly team health narrative
 
 ## Response Format
 
-Write 3-4 short paragraphs of **plain text**. The dashboard will render your response directly.
+**Create a downloadable file** named \`weekly-narrative.txt\` containing 3-4 short paragraphs of plain text.
 
-You may use **bold** for emphasis and markdown headers (## Section) to organize if needed, but keep it concise. No bullet points or numbered lists — write in prose.
+You may use **bold** for emphasis and markdown headers (## Section) to organize if needed, but keep it concise. No bullet points or numbered lists — write in prose. The file should contain only the narrative text, no preamble.
 
 ## Constraints
 
@@ -642,7 +641,7 @@ ${dataSections.join("\n\n---\n\n")}
 
 ---
 
-> **Reminder:** Write prose paragraphs. No JSON. Be specific, cite numbers, name names.
+> **Reminder:** Create a downloadable file named weekly-narrative.txt with prose paragraphs only. If you cannot create files, return the text directly. Be specific, cite numbers, name names.
 `;
 }
 

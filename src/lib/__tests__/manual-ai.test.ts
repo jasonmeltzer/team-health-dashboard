@@ -250,7 +250,7 @@ describe("Manual AI mode", () => {
       // Check instructions header
       expect(result).toContain("# Team Health Analysis — AI Prompt");
       expect(result).toContain("Instructions:");
-      expect(result).toContain("Paste this entire file into any AI chat");
+      expect(result).toContain("Upload this file to any AI chat");
 
       // Check score breakdown
       expect(result).toContain("75/100");
@@ -373,7 +373,7 @@ describe("Manual AI mode", () => {
       // Check instructions header
       expect(result).toContain("# Weekly Team Health Narrative — AI Prompt");
       expect(result).toContain("Instructions:");
-      expect(result).toContain("Paste this entire file into any AI chat");
+      expect(result).toContain("Upload this file to any AI chat");
 
       // Check prose format instructions
       expect(result).toContain("3-4 short paragraphs");
