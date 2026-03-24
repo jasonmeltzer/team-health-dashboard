@@ -22,6 +22,7 @@ export function ManualAIResponseModal({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -32,6 +33,7 @@ export function ManualAIResponseModal({
       setError(null);
       setSuccess(false);
       setShowPaste(false);
+      setDragging(false);
     }
   }, [open]);
 
@@ -42,8 +44,6 @@ export function ManualAIResponseModal({
   }, [showPaste]);
 
   if (!open) return null;
-
-  const [dragging, setDragging] = useState(false);
 
   const loadFile = async (file: File) => {
     const text = await file.text();
