@@ -36,17 +36,18 @@ function makeGitHub(overrides: Partial<{
     reviewBottlenecks: [
       {
         reviewer: "alice",
+        avatarUrl: "",
         pendingReviews: 2,
         completedReviews: 5,
         avgReviewTimeHours: 8,
-        pendingPRs: [{ number: 101, title: "Fix bug", author: "bob", hoursWaiting: 12 }],
+        pendingPRs: [{ number: 101, title: "Fix bug", author: "bob", hoursWaiting: 12, url: "https://github.com/org/repo/pull/101" }],
       },
     ],
     stalePRs: [
       { number: 42, title: "Old PR", author: "charlie", reviewers: ["alice"], daysSinceUpdate: 10, url: "https://github.com/org/repo/pull/42" },
     ],
     openPRs: [
-      { number: 42, title: "Old PR", author: "charlie", reviewers: ["alice"], daysOpen: 10, isDraft: false, url: "https://github.com/org/repo/pull/42", needsReview: true },
+      { number: 42, title: "Old PR", author: "charlie", reviewers: ["alice"], daysOpen: 10, isDraft: false, url: "https://github.com/org/repo/pull/42" },
     ],
     summary: {
       totalOpenPRs: overrides.totalOpenPRs ?? 5,
@@ -62,6 +63,9 @@ function makeLinear(): LinearMetrics {
     mode: "continuous" as const,
     availableCycles: [],
     workloadByCycle: {},
+    timeInStateByCycle: {},
+    stalledIssuesByCycle: {},
+    summaryByCycle: {},
     summary: {
       currentCycleName: "Continuous",
       currentCycleProgress: 0,
@@ -76,13 +80,13 @@ function makeLinear(): LinearMetrics {
       { assignee: "dev0", avatarUrl: null, todo: 3, inProgress: 2, completed: 5, totalPoints: 10, issues: [] },
     ],
     timeInState: {
-      stats: [{ state: "In Progress", count: 5, meanDays: 2, medianDays: 1.5, p90Days: 4 }],
+      stats: [{ state: "In Progress", count: 5, minDays: 0.5, maxDays: 6, meanDays: 2, medianDays: 1.5, p90Days: 4 }],
       issues: [],
       flowEfficiency: 45,
       leadTimeTrend: [],
     },
     stalledIssues: [
-      { identifier: "ENG-123", title: "Stalled task", state: "In Progress", daysSinceLastUpdate: 7, assignee: "dev0", url: "https://linear.app/team/ENG-123" },
+      { id: "id-123", identifier: "ENG-123", title: "Stalled task", state: "In Progress", daysSinceLastUpdate: 7, assignee: "dev0", url: "https://linear.app/team/ENG-123" },
     ],
   };
 }
@@ -110,7 +114,7 @@ function makeSlack(): SlackMetrics {
 function makeDORA(overrides: Partial<{ totalDeployments: number }> = {}): DORAMetrics {
   return {
     trend: [
-      { period: "W1", deploymentCount: 5, successCount: 4, failureCount: 1, changeFailureRate: 20, mttrHours: 2 },
+      { period: "W1", deploymentCount: 5, successCount: 4, failureCount: 1, otherCount: 0, avgLeadTimeHours: null, changeFailureRate: 20, mttrHours: 2 },
     ],
     deployments: [],
     incidents: [

@@ -57,8 +57,8 @@ export async function GET(request: NextRequest) {
     const provider = getProvider();
 
     if (provider === "manual") {
-      // Check if there's a previously imported response in the cache
-      const cached = cache.get<HealthSummaryData>("health-summary");
+      // Check if there's a manually-imported response (separate key from AI-generated cache)
+      const cached = cache.get<HealthSummaryData>("manual:health-summary");
       if (cached && !force) {
         // Serve the imported response, tagged with manualMode
         const data = { ...cached.value, manualMode: true };

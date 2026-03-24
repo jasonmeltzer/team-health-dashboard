@@ -7,13 +7,21 @@ import { computeHealthScore } from "@/lib/scoring";
 import { getConfig } from "@/lib/config";
 import { getOrFetch, buildCacheKey, cache, CACHE_TTL } from "@/lib/cache";
 
+/** Normalize smart quotes and other copy-paste artifacts that break JSON parsing. */
+function normalizeQuotes(text: string): string {
+  return text
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') // smart double quotes → straight
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'"); // smart single quotes → straight
+}
+
 /** Extract JSON from responses that may wrap it in markdown code fences or add preamble. */
 function extractJSON(text: string): string {
-  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  const normalized = normalizeQuotes(text);
+  const fenceMatch = normalized.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
   if (fenceMatch) return fenceMatch[1].trim();
-  const braceMatch = text.match(/\{[\s\S]*\}/);
+  const braceMatch = normalized.match(/\{[\s\S]*\}/);
   if (braceMatch) return braceMatch[0];
-  return text;
+  return normalized;
 }
 
 export async function POST(request: NextRequest) {
@@ -63,9 +71,13 @@ async function handleHealthSummaryResponse(response: string) {
         { status: 400 }
       );
     }
-  } catch {
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "";
+    // Log for debugging
+    console.error("[ai-response] JSON parse failed:", detail);
+    console.error("[ai-response] First 200 chars of input:", response.slice(0, 200));
     return Response.json(
-      { error: "Could not parse JSON from the response. Make sure you copied the AI's complete response, including the JSON object with 'insights' and 'recommendations'." },
+      { error: `Could not parse JSON from the response. ${detail ? `(${detail}) ` : ""}Make sure you copied the AI's complete response, including the JSON object with 'insights' and 'recommendations'.` },
       { status: 400 }
     );
   }
@@ -104,8 +116,8 @@ async function handleHealthSummaryResponse(response: string) {
     generatedAt: new Date().toISOString(),
   };
 
-  // Store in the health-summary cache so the card picks it up on next load
-  cache.set("health-summary", {
+  // Store under a manual-specific cache key (separate from AI-generated responses)
+  cache.set("manual:health-summary", {
     value: result,
     cachedAt: Date.now(),
     ttlMs: CACHE_TTL.healthSummary,
@@ -138,8 +150,8 @@ function handleWeeklyNarrativeResponse(response: string) {
     generatedAt: new Date().toISOString(),
   };
 
-  // Store in the weekly-narrative cache
-  cache.set("weekly-narrative", {
+  // Store under a manual-specific cache key (separate from AI-generated responses)
+  cache.set("manual:weekly-narrative", {
     value: result,
     cachedAt: Date.now(),
     ttlMs: CACHE_TTL.weeklyNarrative,

@@ -11,8 +11,8 @@ export async function GET(request: NextRequest) {
   try {
     const provider = getProvider();
     if (provider === "manual") {
-      // Check if there's an imported response in the cache
-      const cached = cache.get<{ narrative: string; weekOf: string; generatedAt: string }>("weekly-narrative");
+      // Check if there's a manually-imported response (separate key from AI-generated cache)
+      const cached = cache.get<{ narrative: string; weekOf: string; generatedAt: string }>("manual:weekly-narrative");
       if (cached) {
         return Response.json({
           data: { ...cached.value, manualMode: true },
