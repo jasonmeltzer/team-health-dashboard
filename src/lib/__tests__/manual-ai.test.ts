@@ -495,4 +495,51 @@ That covers the key findings.`;
       expect(() => JSON.parse(result)).toThrow();
     });
   });
+
+  describe("smart quote normalization", () => {
+    // Re-implement normalizeQuotes from ai-response/route.ts
+    function normalizeQuotes(text: string): string {
+      return text
+        .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+        .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
+    }
+
+    it("converts curly double quotes to straight", () => {
+      const input = '\u201Cinsight one\u201D';
+      expect(normalizeQuotes(input)).toBe('"insight one"');
+    });
+
+    it("converts curly single quotes to straight", () => {
+      const input = "team\u2019s velocity";
+      expect(normalizeQuotes(input)).toBe("team's velocity");
+    });
+
+    it("makes ChatGPT-style JSON parseable", () => {
+      const input = '{\u201Cinsights\u201D:[\u201Chigh cycle time\u201D],\u201Crecommendations\u201D:[\u201Creduce WIP\u201D]}';
+      const normalized = normalizeQuotes(input);
+      const parsed = JSON.parse(normalized);
+      expect(parsed.insights).toEqual(["high cycle time"]);
+      expect(parsed.recommendations).toEqual(["reduce WIP"]);
+    });
+
+    it("leaves already-straight quotes unchanged", () => {
+      const input = '{"insights":["normal quotes"]}';
+      expect(normalizeQuotes(input)).toBe(input);
+    });
+  });
+
+  describe("dated filenames in prompts", () => {
+    it("health summary prompt requests a dated JSON file", () => {
+      mockGetConfig.mockReturnValue(undefined);
+      const result = buildHealthSummaryPromptFile(makeGitHub(), null, null, null, makeScoreResult());
+      // Should contain a date-stamped filename like health-insights-YYYY-MM-DD.json
+      expect(result).toMatch(/health-insights-\d{4}-\d{2}-\d{2}\.json/);
+    });
+
+    it("weekly narrative prompt requests a dated TXT file", () => {
+      mockGetConfig.mockReturnValue(undefined);
+      const result = buildWeeklyNarrativePromptFile(makeGitHub(), null, null, null);
+      expect(result).toMatch(/weekly-narrative-\d{4}-\d{2}-\d{2}\.txt/);
+    });
+  });
 });
