@@ -67,10 +67,11 @@ export function ManualAIResponseModal({
       }
 
       setSuccess(true);
+      // Start the refetch immediately, close after a brief flash of success
+      onImported();
       setTimeout(() => {
-        onImported();
         onClose();
-      }, 1000);
+      }, 600);
     } catch {
       setError("Failed to submit response. Please try again.");
     } finally {

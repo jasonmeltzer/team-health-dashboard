@@ -408,11 +408,12 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
                   </ul>
                 </div>
               )}
-
-              {data.manualMode && (
-                <ManualModeControls onImported={refetch} />
-              )}
             </>
+          )}
+
+          {/* Always show manual controls in manual mode (including after import for re-import) */}
+          {data.manualMode && data.recommendations.length > 0 && (
+            <ManualModeControls onImported={refetch} />
           )}
         </div>
       </div>

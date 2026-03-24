@@ -57,21 +57,31 @@ export async function GET(request: NextRequest) {
     const provider = getProvider();
 
     if (provider === "manual") {
-      // Check if there's a manually-imported response (separate key from AI-generated cache)
-      const cached = cache.get<HealthSummaryData>("manual:health-summary");
-      if (cached && !force) {
-        // Serve the imported response, tagged with manualMode
-        const data = { ...cached.value, manualMode: true };
+      // Always re-compute the deterministic score (even on force refresh)
+      const { github, linear, slack, dora } = await fetchSourceData();
+      const scoreResult = computeHealthScore(github, linear, slack, dora);
+
+      // Check if there's a manually-imported response with AI insights
+      const imported = cache.get<HealthSummaryData>("manual:health-summary");
+      if (imported) {
+        // Merge fresh score with imported AI insights/recommendations
+        const data: HealthSummaryData = {
+          overallHealth: scoreResult.overallHealth,
+          score: scoreResult.score,
+          scoreBreakdown: scoreResult.deductions,
+          insights: imported.value.insights,
+          recommendations: imported.value.recommendations,
+          generatedAt: imported.value.generatedAt,
+          manualMode: true,
+        };
         return Response.json({
           data,
-          fetchedAt: new Date(cached.cachedAt).toISOString(),
-          cached: true,
+          fetchedAt: new Date(imported.cachedAt).toISOString(),
+          cached: !force,
         });
       }
 
-      // No import (or force refresh) — return deterministic score + manualMode flag
-      const { github, linear, slack, dora } = await fetchSourceData();
-      const scoreResult = computeHealthScore(github, linear, slack, dora);
+      // No import yet — return score with fallback insights
       const data: HealthSummaryData = {
         overallHealth: scoreResult.overallHealth,
         score: scoreResult.score,
