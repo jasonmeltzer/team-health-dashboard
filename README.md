@@ -52,7 +52,7 @@ On top of the deterministic score, an optional AI layer (Claude or a local Ollam
 - **Rate limit detection** with countdown timers and graceful degradation
 - **Graceful degradation**: unconfigured integrations show setup placeholders with instructions
 - **In-app settings**: configure integrations from the dashboard UI (gear icon) — no `.env.local` editing required
-- **Local AI support**: use Ollama for free local inference, or Anthropic for Claude
+- **Flexible AI support**: Ollama (free, local), Anthropic Claude API, or Manual mode (export prompts to any AI chat — no API key needed)
 
 ## Tech Stack
 
@@ -61,7 +61,7 @@ On top of the deterministic score, an optional AI layer (Claude or a local Ollam
 | Framework | Next.js 16 (App Router) + TypeScript |
 | Styling | Tailwind CSS |
 | Charts | Recharts |
-| AI | Ollama (local, free) or Claude API (Anthropic SDK) |
+| AI | Ollama (local, free), Claude API (Anthropic SDK), or Manual (any AI chat) |
 | GitHub | Octokit (REST API) |
 | Linear | GraphQL API (raw fetch) |
 | Slack | @slack/web-api |
@@ -98,7 +98,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed system documentation includi
   - **GitHub**: [Personal access token](https://github.com/settings/tokens) with `repo` scope
   - **Linear**: [API key](https://linear.app/settings/api) (Settings > API > Personal API keys)
   - **Slack**: [Bot token](https://api.slack.com/apps) with `channels:history`, `channels:read`, `users:read` scopes
-- For AI features (optional): **Ollama** (free, local) or an **Anthropic** API key
+- For AI features (optional): **Ollama** (free, local), an **Anthropic** API key, or **Manual** mode (no setup — use any AI chat)
 
 ### Install & Run
 
@@ -124,7 +124,7 @@ There are two ways to configure integrations:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `AI_PROVIDER` | No | `ollama` (default) or `anthropic` |
+| `AI_PROVIDER` | No | `ollama` (default), `anthropic`, or `manual` |
 | `ANTHROPIC_API_KEY` | For Anthropic AI | Anthropic API key for Claude |
 | `OLLAMA_BASE_URL` | No | Ollama server URL (default: `http://localhost:11434`) |
 | `OLLAMA_MODEL` | No | Ollama model name (default: `llama3`) |
@@ -172,7 +172,7 @@ src/
 │   ├── linear.ts                       # Linear GraphQL client
 │   ├── slack.ts                        # Slack API client
 │   ├── dora.ts                         # DORA metrics (deployments, incidents, correlation)
-│   ├── claude.ts                       # AI provider abstraction (Ollama or Anthropic)
+│   ├── claude.ts                       # AI provider abstraction (Ollama, Anthropic, or Manual)
 │   ├── scoring.ts                      # Deterministic health score computation
 │   ├── config.ts                       # Dual config reader (env vars + .config.local.json)
 │   ├── utils.ts                        # Date helpers, rate limit error handling
@@ -185,7 +185,7 @@ src/
 - **No database**: keeps deployment simple. All metrics are computed on each request from the source APIs.
 - **No Linear SDK**: uses raw GraphQL fetch to keep dependencies minimal and queries transparent.
 - **Client-side data fetching**: each dashboard section loads independently, so slower sources (Slack, Claude) don't block the page.
-- **Pluggable AI**: defaults to Ollama (free, local) so you don't need a paid API account. Anthropic/Claude is available for higher quality.
+- **Pluggable AI**: defaults to Ollama (free, local). Anthropic/Claude is available for higher quality with richer prompts. Manual mode lets you use any AI chat (ChatGPT, Claude, Gemini) with no API key — just download a prompt file and import the response.
 - **Two config paths**: settings UI for quick setup, env vars for deployment. Env vars always take precedence.
 - **Graceful degradation**: each integration is optional. Unconfigured sections show helpful placeholders. The AI summary works with whatever data sources are configured.
 

@@ -3,7 +3,7 @@ import { fetchGitHubMetrics } from "@/lib/github";
 import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
 import { fetchDORAMetrics } from "@/lib/dora";
-import { generateHealthSummary, isAIConfigured, OllamaNotRunningError } from "@/lib/claude";
+import { generateHealthSummary, isAIConfigured, getProvider, OllamaNotRunningError } from "@/lib/claude";
 import { computeHealthScore, type ScoreDeduction } from "@/lib/scoring";
 import { getConfig } from "@/lib/config";
 import { getOrFetch, buildCacheKey, CACHE_TTL } from "@/lib/cache";
@@ -15,6 +15,7 @@ interface HealthSummaryData {
   insights: string[];
   recommendations: string[];
   generatedAt: string;
+  manualMode?: boolean;
 }
 
 export async function GET(request: NextRequest) {
@@ -54,6 +55,23 @@ export async function GET(request: NextRequest) {
         }
 
         const scoreResult = computeHealthScore(github, linear, slack, dora);
+        const provider = getProvider();
+
+        if (provider === "manual") {
+          // Manual mode: return score with fallback insights, UI handles export/import
+          return {
+            overallHealth: scoreResult.overallHealth,
+            score: scoreResult.score,
+            scoreBreakdown: scoreResult.deductions,
+            insights: scoreResult.deductions
+              .filter((d) => d.points > 0)
+              .slice(0, 5)
+              .map((d) => `${d.signal}: ${d.detail}`),
+            recommendations: [],
+            generatedAt: new Date().toISOString(),
+            manualMode: true,
+          };
+        }
 
         if (isAIConfigured()) {
           const summary = await generateHealthSummary(github, linear, slack, scoreResult, dora);
@@ -67,7 +85,7 @@ export async function GET(request: NextRequest) {
           insights: scoreResult.deductions
             .filter((d) => d.points > 0)
             .map((d) => `${d.signal}: ${d.detail}`),
-          recommendations: ["Connect an AI provider (Ollama or Anthropic) for richer insights."],
+          recommendations: ["Connect an AI provider (Ollama, Anthropic, or Manual) for richer insights."],
           generatedAt: new Date().toISOString(),
         };
       },

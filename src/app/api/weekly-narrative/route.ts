@@ -3,12 +3,18 @@ import { fetchGitHubMetrics } from "@/lib/github";
 import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
 import { fetchDORAMetrics } from "@/lib/dora";
-import { generateWeeklyNarrative, isAIConfigured, OllamaNotRunningError } from "@/lib/claude";
+import { generateWeeklyNarrative, isAIConfigured, getProvider, OllamaNotRunningError } from "@/lib/claude";
 import { getConfig } from "@/lib/config";
 import { getOrFetch, buildCacheKey, CACHE_TTL } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
+    const provider = getProvider();
+    if (provider === "manual") {
+      // Manual mode: return manualMode flag so UI shows export/import controls
+      return Response.json({ data: { manualMode: true }, fetchedAt: new Date().toISOString() });
+    }
+
     if (!isAIConfigured()) {
       return Response.json({ notConfigured: true });
     }

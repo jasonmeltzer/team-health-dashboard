@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ManualAIResponseModal } from "./ManualAIResponseModal";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 function ScoreInfo() {
@@ -179,6 +180,59 @@ function ScoreBreakdown({
   );
 }
 
+function ManualModeControls({ onImported }: { onImported: () => void }) {
+  const [importOpen, setImportOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch("/api/ai-prompt?type=health-summary");
+      if (!res.ok) throw new Error("Failed to generate prompt file");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `team-health-summary-prompt-${new Date().toISOString().split("T")[0]}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download failed:", err);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="mt-3 flex items-center gap-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <span className="text-xs text-zinc-400">Manual AI mode:</span>
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        >
+          {downloading ? "Generating..." : "Download Prompt"}
+        </button>
+        <button
+          onClick={() => setImportOpen(true)}
+          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        >
+          Import Response
+        </button>
+      </div>
+      <ManualAIResponseModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        type="health-summary"
+        onImported={onImported}
+      />
+    </>
+  );
+}
+
 export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const { data, loading, error, notConfigured, setupHint, cached, refetch } = useApiData<HealthSummary>(
@@ -327,6 +381,10 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
                 ))}
               </ul>
             </div>
+          )}
+
+          {data.manualMode && (
+            <ManualModeControls onImported={refetch} />
           )}
         </div>
       </div>

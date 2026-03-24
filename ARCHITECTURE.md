@@ -14,7 +14,7 @@ Team Health Dashboard is a Next.js 16 application that aggregates engineering me
 - **Octokit** for GitHub REST API (paginated with early termination)
 - **Raw GraphQL fetch** for Linear API (no SDK)
 - **@slack/web-api** for Slack API
-- **Anthropic SDK** or **Ollama** for AI analysis
+- **Anthropic SDK**, **Ollama**, or **Manual** (any AI chat) for AI analysis
 
 ---
 
@@ -55,6 +55,12 @@ graph TD
     API_WN --> GitHub
     API_WN --> AI
 
+    API_PROMPT["/api/ai-prompt"] --> GitHub
+    API_PROMPT --> Linear
+    API_PROMPT --> Slack
+    API_PROMPT --> Scoring
+    API_RESP["/api/ai-response"] --> Scoring
+
     API_CFG --> ConfigFile[".config.local.json"]
 ```
 
@@ -84,6 +90,8 @@ src/
 │       ├── dora/route.ts               # DORA metrics
 │       ├── health-summary/route.ts     # Score + AI insights
 │       ├── weekly-narrative/route.ts   # AI prose narrative
+│       ├── ai-prompt/route.ts         # Prompt export for manual AI mode
+│       ├── ai-response/route.ts       # Response import for manual AI mode
 │       └── config/route.ts             # Settings read/write
 ├── components/
 │   ├── ThemeProvider.tsx                # Dark/light mode context
@@ -230,36 +238,55 @@ Incidents are correlated to deployments via a **24-hour time proximity window**.
 
 ## AI Integration
 
-### Two Providers
+### Three Providers
 
 | Provider | Config | Notes |
 |----------|--------|-------|
-| **Ollama** (default) | `AI_PROVIDER=ollama` | Free, local. Requires `ollama pull llama3`. |
-| **Anthropic** | `ANTHROPIC_API_KEY=...` | Paid. Uses Claude Sonnet. |
+| **Ollama** (default) | `AI_PROVIDER=ollama` | Free, local. Requires `ollama pull llama3`. Compact prompts with defensive parsing. |
+| **Anthropic** | `ANTHROPIC_API_KEY=...` | Paid. Uses Claude Sonnet. Rich prompts with detailed per-item data. |
+| **Manual** | `AI_PROVIDER=manual` | No API key or local software. Export prompts to any AI chat, import responses back. |
 
 Auto-detected: if `ANTHROPIC_API_KEY` is set, uses Anthropic. Otherwise defaults to Ollama.
 
-### Two AI Endpoints
+### Provider-Aware Prompts
+
+- **Compact** (Ollama): Summary-level data, JSON mode enforced, temperature 0, defensive JSON extraction
+- **Rich** (Anthropic + Manual export): Individual PRs/issues with details, per-person stats, trend breakdowns, higher max tokens. Shared prompt builder code.
+
+### AI Endpoints
 
 1. **Health Summary** (`/api/health-summary`):
    - Computes deterministic score first (no LLM)
    - Passes score + raw data to LLM for insights and recommendations only
    - Falls back to score breakdown as insights if LLM fails
-   - Uses JSON mode + temperature 0 for structured output
+   - In manual mode: returns score + breakdown with `manualMode: true` flag
 
 2. **Weekly Narrative** (`/api/weekly-narrative`):
    - Sends all trend data to LLM for prose summary
    - Post-processes to strip hallucinated references to disconnected sources
+   - In manual mode: returns `manualMode: true` flag, UI shows export/import controls
+
+3. **Prompt Export** (`/api/ai-prompt?type=health-summary|weekly-narrative`):
+   - Generates a self-contained markdown file with instructions + all metrics data
+   - User downloads and pastes into any AI chat (ChatGPT, Claude, Gemini, etc.)
+   - Uses rich prompt format with detailed per-item data
+
+4. **Response Import** (`POST /api/ai-response`):
+   - Accepts `{ type, response }` — the raw text from the user's AI chat
+   - For health-summary: parses JSON, validates structure, merges with current deterministic score
+   - For weekly-narrative: takes prose as-is
+   - Stores result in server cache for subsequent loads
 
 ### Graceful Degradation
 
 - If AI is unconfigured → health score still works (deterministic), narrative shows setup hint
 - If AI fails → health score works, error shown for narrative
 - If some integrations are missing → AI only receives data from connected sources
+- Manual mode always works — no external dependencies
 
 ### Code
 
-`src/lib/claude.ts` — exports `generateHealthSummary()`, `generateWeeklyNarrative()`, `isAIConfigured()`. Contains prompt builders, JSON extraction, and hallucination stripping.
+`src/lib/claude.ts` — exports `generateHealthSummary()`, `generateWeeklyNarrative()`, `isAIConfigured()`, `getProvider()`, `buildHealthSummaryPromptFile()`, `buildWeeklyNarrativePromptFile()`. Contains provider-aware prompt builders (compact for Ollama, rich for Anthropic/Manual), JSON extraction, and hallucination stripping.
 
 ---
 

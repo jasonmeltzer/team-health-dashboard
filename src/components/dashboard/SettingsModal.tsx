@@ -314,7 +314,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                     AI Analysis
                   </h3>
                   <p className="mt-1 text-xs text-zinc-500">
-                    Powers health summaries and weekly narratives. Use Ollama for free local inference, or Anthropic for Claude.
+                    Powers health summaries and weekly narratives. Use Ollama for free local inference, Anthropic for Claude API, or Manual to use any AI chat.
                   </p>
                   {status?.ai && (
                     <span className="mt-2 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
@@ -327,8 +327,8 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                   <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                     Provider
                   </label>
-                  <div className="flex gap-2">
-                    {(["ollama", "anthropic"] as const).map((p) => (
+                  <div className="flex flex-wrap gap-2">
+                    {(["ollama", "anthropic", "manual"] as const).map((p) => (
                       <button
                         key={p}
                         onClick={() => setAi((s) => ({ ...s, provider: p }))}
@@ -339,7 +339,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                             : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
                         )}
                       >
-                        {p === "ollama" ? "Ollama (free, local)" : "Anthropic (Claude)"}
+                        {p === "ollama" ? "Ollama (free, local)" : p === "anthropic" ? "Anthropic (Claude)" : "Manual (any AI chat)"}
                       </button>
                     ))}
                   </div>
@@ -375,6 +375,18 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                       help={"To set up Ollama:\n1. Install from ollama.com (macOS, Linux, or Windows)\n2. Open a terminal and run: ollama pull llama3\n3. Wait for the download to complete (~4GB)\n\nOther good models to try:\n- llama3 (default, good all-around)\n- mistral (fast, good for structured output)\n- llama3:70b (higher quality, needs more RAM)"}
                     />
                   </>
+                )}
+
+                {ai.provider === "manual" && (
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400">
+                    <p className="mb-2 font-medium text-zinc-700 dark:text-zinc-300">How manual mode works</p>
+                    <ol className="list-inside list-decimal space-y-1">
+                      <li>The dashboard generates a prompt file with your metrics data</li>
+                      <li>Download the file and paste it into any AI chat (ChatGPT, Claude, Gemini, etc.)</li>
+                      <li>Copy the AI&apos;s response and import it back into the dashboard</li>
+                    </ol>
+                    <p className="mt-2 text-zinc-400">No API keys or local software needed. Works with any AI you have access to, including free tiers.</p>
+                  </div>
                 )}
 
                 <button
