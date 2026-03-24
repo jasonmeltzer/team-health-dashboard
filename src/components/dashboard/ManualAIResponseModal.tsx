@@ -17,20 +17,29 @@ export function ManualAIResponseModal({
   onImported,
 }: ManualAIResponseModalProps) {
   const [response, setResponse] = useState("");
+  const [fileName, setFileName] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showPaste, setShowPaste] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (open) {
       setResponse("");
+      setFileName(null);
       setError(null);
       setSuccess(false);
-      setTimeout(() => textareaRef.current?.focus(), 100);
+      setShowPaste(false);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (showPaste) {
+      setTimeout(() => textareaRef.current?.focus(), 100);
+    }
+  }, [showPaste]);
 
   if (!open) return null;
 
@@ -40,12 +49,14 @@ export function ManualAIResponseModal({
 
     const text = await file.text();
     setResponse(text);
+    setFileName(file.name);
     setError(null);
+    setShowPaste(false);
   };
 
   const handleSubmit = async () => {
     if (!response.trim()) {
-      setError("Please paste the AI's response first.");
+      setError("No response to import. Upload a file or paste text first.");
       return;
     }
 
@@ -81,12 +92,10 @@ export function ManualAIResponseModal({
 
   const isHealthSummary = type === "health-summary";
   const title = isHealthSummary ? "Import Health Summary" : "Import Weekly Narrative";
+  const expectedFile = isHealthSummary ? "health-insights.json" : "weekly-narrative.txt";
   const placeholder = isHealthSummary
     ? '{"insights":["..."],"recommendations":["..."]}'
     : "Paste the narrative text here...";
-  const hint = isHealthSummary
-    ? "Paste the JSON response from your AI chat. It should contain \"insights\" and \"recommendations\" arrays."
-    : "Paste the narrative text from your AI chat. It should be a few paragraphs of prose.";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -108,40 +117,77 @@ export function ManualAIResponseModal({
 
         {/* Body */}
         <div className="space-y-4 px-6 py-4">
-          <p className="text-sm text-zinc-500">{hint}</p>
-
-          <textarea
-            ref={textareaRef}
-            value={response}
-            onChange={(e) => {
-              setResponse(e.target.value);
-              setError(null);
-            }}
-            placeholder={placeholder}
-            rows={10}
-            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500"
-          />
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            >
-              Upload file instead
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".txt,.md,.json"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            {response && (
-              <span className="text-xs text-zinc-400">
-                {response.length.toLocaleString()} characters
-              </span>
+          {/* Primary: file upload */}
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className={cn(
+              "flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 transition-colors",
+              fileName
+                ? "border-emerald-300 bg-emerald-50/50 dark:border-emerald-700 dark:bg-emerald-950/20"
+                : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-600 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/50"
+            )}
+          >
+            {fileName ? (
+              <>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">{fileName}</p>
+                <p className="text-xs text-emerald-600/70 dark:text-emerald-500/70">{response.length.toLocaleString()} characters loaded</p>
+              </>
+            ) : (
+              <>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Upload the AI&apos;s response file</p>
+                <p className="text-xs text-zinc-400">
+                  Drop {expectedFile} here or click to browse
+                </p>
+              </>
             )}
           </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.md,.json"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+
+          {/* Secondary: paste text */}
+          {!showPaste && !fileName ? (
+            <button
+              onClick={() => setShowPaste(true)}
+              className="w-full text-center text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            >
+              or paste text instead
+            </button>
+          ) : showPaste ? (
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                Paste response text:
+              </label>
+              <textarea
+                ref={textareaRef}
+                value={response}
+                onChange={(e) => {
+                  setResponse(e.target.value);
+                  setFileName(null);
+                  setError(null);
+                }}
+                placeholder={placeholder}
+                rows={8}
+                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500"
+              />
+              {response && !fileName && (
+                <p className="text-xs text-zinc-400">{response.length.toLocaleString()} characters</p>
+              )}
+            </div>
+          ) : null}
 
           {error && (
             <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
