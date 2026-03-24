@@ -7,6 +7,11 @@ import type { ApiResponse } from "@/types/api";
 const clientCache = new Map<string, { data: unknown; fetchedAt: string; timestamp: number }>();
 const CLIENT_CACHE_TTL = 15 * 60 * 1000; // 15 minutes, matches server TTL
 
+/** Clear all client-side cached API responses. Call when config changes. */
+export function clearClientCache() {
+  clientCache.clear();
+}
+
 export function useApiData<T>(url: string, refreshKey: number) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);

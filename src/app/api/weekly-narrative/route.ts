@@ -5,13 +5,22 @@ import { fetchSlackMetrics } from "@/lib/slack";
 import { fetchDORAMetrics } from "@/lib/dora";
 import { generateWeeklyNarrative, isAIConfigured, getProvider, OllamaNotRunningError } from "@/lib/claude";
 import { getConfig } from "@/lib/config";
-import { getOrFetch, buildCacheKey, CACHE_TTL } from "@/lib/cache";
+import { getOrFetch, buildCacheKey, cache, CACHE_TTL } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
     const provider = getProvider();
     if (provider === "manual") {
-      // Manual mode: return manualMode flag so UI shows export/import controls
+      // Check if there's an imported response in the cache
+      const cached = cache.get<{ narrative: string; weekOf: string; generatedAt: string }>("weekly-narrative");
+      if (cached) {
+        return Response.json({
+          data: { ...cached.value, manualMode: true },
+          fetchedAt: new Date(cached.cachedAt).toISOString(),
+          cached: true,
+        });
+      }
+      // No imported response yet — return manualMode flag so UI shows export/import controls
       return Response.json({ data: { manualMode: true }, fetchedAt: new Date().toISOString() });
     }
 

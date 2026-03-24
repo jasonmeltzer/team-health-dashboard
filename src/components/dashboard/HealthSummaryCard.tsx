@@ -351,40 +351,68 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
             )}
           </div>
 
-          <ul className="space-y-1">
-            {data.insights.map((insight, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-400"
-              >
-                <span className={healthColors[data.overallHealth]}>
-                  {"\u2022"}
-                </span>
-                {insight}
-              </li>
-            ))}
-          </ul>
-
-          {data.recommendations.length > 0 && (
-            <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                Recommendations
-              </p>
+          {/* In manual mode with no imported AI response, show compact score summary + prominent manual controls */}
+          {data.manualMode && data.recommendations.length === 0 ? (
+            <>
+              {data.insights.length > 0 && (
+                <div>
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
+                    Score signals
+                  </p>
+                  <ul className="space-y-0.5">
+                    {data.insights.map((insight, i) => (
+                      <li key={i} className="text-xs text-zinc-500 dark:text-zinc-500">
+                        {insight}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50/50 p-3 dark:border-zinc-700 dark:bg-zinc-800/30">
+                <p className="mb-2 text-sm text-zinc-500">
+                  Export your metrics as a prompt, paste into any AI chat, then import the response for richer insights.
+                </p>
+                <ManualModeControls onImported={refetch} />
+              </div>
+            </>
+          ) : (
+            <>
               <ul className="space-y-1">
-                {data.recommendations.map((rec, i) => (
+                {data.insights.map((insight, i) => (
                   <li
                     key={i}
-                    className="text-sm text-zinc-700 dark:text-zinc-300"
+                    className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-400"
                   >
-                    {i + 1}. {rec}
+                    <span className={healthColors[data.overallHealth]}>
+                      {"\u2022"}
+                    </span>
+                    {insight}
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
 
-          {data.manualMode && (
-            <ManualModeControls onImported={refetch} />
+              {data.recommendations.length > 0 && (
+                <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                    Recommendations
+                  </p>
+                  <ul className="space-y-1">
+                    {data.recommendations.map((rec, i) => (
+                      <li
+                        key={i}
+                        className="text-sm text-zinc-700 dark:text-zinc-300"
+                      >
+                        {i + 1}. {rec}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {data.manualMode && (
+                <ManualModeControls onImported={refetch} />
+              )}
+            </>
           )}
         </div>
       </div>
