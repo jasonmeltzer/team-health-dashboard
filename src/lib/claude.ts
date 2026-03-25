@@ -15,18 +15,21 @@ export class OllamaNotRunningError extends Error {
   }
 }
 
+/** Normalize smart quotes and other copy-paste artifacts that break JSON parsing. */
+export function normalizeQuotes(text: string): string {
+  return text
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
+}
+
 /** Extract JSON from LLM responses that may wrap it in markdown code fences or add preamble text. */
-function extractJSON(text: string): string {
-  // Try to find JSON inside ```json ... ``` or ``` ... ``` fences
-  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+export function extractJSON(text: string): string {
+  const normalized = normalizeQuotes(text);
+  const fenceMatch = normalized.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
   if (fenceMatch) return fenceMatch[1].trim();
-
-  // Try to find a JSON object directly
-  const braceMatch = text.match(/\{[\s\S]*\}/);
+  const braceMatch = normalized.match(/\{[\s\S]*\}/);
   if (braceMatch) return braceMatch[0];
-
-  // Return as-is and let JSON.parse throw
-  return text;
+  return normalized;
 }
 
 type AIProvider = "anthropic" | "ollama" | "manual";

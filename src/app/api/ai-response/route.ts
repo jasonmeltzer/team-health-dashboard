@@ -6,23 +6,7 @@ import { fetchDORAMetrics } from "@/lib/dora";
 import { computeHealthScore } from "@/lib/scoring";
 import { getConfig } from "@/lib/config";
 import { getOrFetch, buildCacheKey, cache, CACHE_TTL } from "@/lib/cache";
-
-/** Normalize smart quotes and other copy-paste artifacts that break JSON parsing. */
-function normalizeQuotes(text: string): string {
-  return text
-    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') // smart double quotes → straight
-    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'"); // smart single quotes → straight
-}
-
-/** Extract JSON from responses that may wrap it in markdown code fences or add preamble. */
-function extractJSON(text: string): string {
-  const normalized = normalizeQuotes(text);
-  const fenceMatch = normalized.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-  if (fenceMatch) return fenceMatch[1].trim();
-  const braceMatch = normalized.match(/\{[\s\S]*\}/);
-  if (braceMatch) return braceMatch[0];
-  return normalized;
-}
+import { extractJSON } from "@/lib/claude";
 
 export async function POST(request: NextRequest) {
   try {
