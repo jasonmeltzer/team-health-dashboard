@@ -16,6 +16,7 @@ interface HealthSummaryData {
   recommendations: string[];
   generatedAt: string;
   manualMode?: boolean;
+  hasImport?: boolean;
 }
 
 /** Fetch all configured source data (reuses cache). */
@@ -61,27 +62,40 @@ export async function GET(request: NextRequest) {
       const { github, linear, slack, dora } = await fetchSourceData();
       const scoreResult = computeHealthScore(github, linear, slack, dora);
 
-      // Check if there's a manually-imported response with AI insights
-      const imported = cache.get<HealthSummaryData>("manual:health-summary");
-      if (imported) {
-        // Merge fresh score with imported AI insights/recommendations
-        const data: HealthSummaryData = {
-          overallHealth: scoreResult.overallHealth,
-          score: scoreResult.score,
-          scoreBreakdown: scoreResult.deductions,
-          insights: imported.value.insights,
-          recommendations: imported.value.recommendations,
-          generatedAt: imported.value.generatedAt,
-          manualMode: true,
-        };
-        return Response.json({
-          data,
-          fetchedAt: new Date(imported.cachedAt).toISOString(),
-          cached: !force,
-        });
+      // Force refresh in manual mode: clear the cached import so the user can re-import.
+      // Source data cache is unaffected — the deterministic score is always fresh.
+      if (force) {
+        cache.delete("manual:health-summary");
       }
 
-      // No import yet — return score with fallback insights
+      const imported = cache.get<HealthSummaryData>("manual:health-summary");
+      if (imported) {
+        // TTL check at read time — the 2x cleanup timer is a memory safety net only,
+        // not the authoritative TTL gate. This prevents stale imports after navigate-away/back.
+        const age = Date.now() - imported.cachedAt;
+        if (age > imported.ttlMs) {
+          cache.delete("manual:health-summary");
+          // fall through to "no import" response below
+        } else {
+          const data: HealthSummaryData = {
+            overallHealth: scoreResult.overallHealth,
+            score: scoreResult.score,
+            scoreBreakdown: scoreResult.deductions,
+            insights: imported.value.insights,
+            recommendations: imported.value.recommendations,
+            generatedAt: imported.value.generatedAt,
+            manualMode: true,
+            hasImport: true,
+          };
+          return Response.json({
+            data,
+            fetchedAt: new Date(imported.cachedAt).toISOString(),
+            cached: !force,
+          });
+        }
+      }
+
+      // No import yet (or TTL expired or force-cleared) — return score with fallback insights
       const data: HealthSummaryData = {
         overallHealth: scoreResult.overallHealth,
         score: scoreResult.score,
@@ -93,6 +107,7 @@ export async function GET(request: NextRequest) {
         recommendations: [],
         generatedAt: new Date().toISOString(),
         manualMode: true,
+        hasImport: false,
       };
 
       return Response.json({

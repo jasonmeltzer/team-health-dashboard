@@ -17,6 +17,8 @@ import {
   isAIConfigured,
   buildHealthSummaryPromptFile,
   buildWeeklyNarrativePromptFile,
+  extractJSON,
+  normalizeQuotes,
 } from "@/lib/claude";
 
 const mockGetConfig = vi.mocked(getConfig);
@@ -429,16 +431,6 @@ describe("Manual AI mode", () => {
   // ─── Response parsing (extractJSON logic) ──────────────────────────
 
   describe("extractJSON (response parsing)", () => {
-    // Re-implement the same extractJSON logic used by ai-response endpoint
-    // to test it directly. The logic is duplicated in claude.ts and ai-response/route.ts.
-    function extractJSON(text: string): string {
-      const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-      if (fenceMatch) return fenceMatch[1].trim();
-      const braceMatch = text.match(/\{[\s\S]*\}/);
-      if (braceMatch) return braceMatch[0];
-      return text;
-    }
-
     it("parses a bare JSON object", () => {
       const input = '{"insights":["a","b"],"recommendations":["c"]}';
       const result = extractJSON(input);
@@ -497,13 +489,6 @@ That covers the key findings.`;
   });
 
   describe("smart quote normalization", () => {
-    // Re-implement normalizeQuotes from ai-response/route.ts
-    function normalizeQuotes(text: string): string {
-      return text
-        .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
-        .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
-    }
-
     it("converts curly double quotes to straight", () => {
       const input = '\u201Cinsight one\u201D';
       expect(normalizeQuotes(input)).toBe('"insight one"');
