@@ -7,12 +7,12 @@
 
 ### Code Quality (PR #3 Follow-ups)
 
-- [ ] **QUAL-01**: extractJSON and normalizeQuotes are exported from claude.ts and imported (not duplicated) in ai-response/route.ts
+- [x] **QUAL-01**: extractJSON and normalizeQuotes are exported from claude.ts and imported (not duplicated) in ai-response/route.ts
 - [x] **QUAL-02**: Force refresh parameter is parsed before the manual mode early return in weekly-narrative/route.ts, with explicit comment on behavior
 - [x] **QUAL-03**: Manual mode cache reads check TTL instead of relying on 2x TTL cleanup timer
 - [x] **QUAL-04**: Health summary response includes hasImport flag to distinguish "no import yet" from "imported with zero recommendations"
 - [x] **QUAL-05**: Client-side cache does not serve stale manual mode stub after import and navigate-away/back
-- [ ] **QUAL-06**: Tests import real extractJSON/normalizeQuotes from claude.ts instead of reimplementing them
+- [x] **QUAL-06**: Tests import real extractJSON/normalizeQuotes from claude.ts instead of reimplementing them
 
 ### Persistence & Data
 
@@ -80,12 +80,12 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| QUAL-01 | Phase 1 | Pending |
+| QUAL-01 | Phase 1 | Complete |
 | QUAL-02 | Phase 1 | Complete |
 | QUAL-03 | Phase 1 | Complete |
 | QUAL-04 | Phase 1 | Complete |
 | QUAL-05 | Phase 1 | Complete |
-| QUAL-06 | Phase 1 | Pending |
+| QUAL-06 | Phase 1 | Complete |
 | PERS-01 | Phase 2 | Pending |
 | PERS-02 | Phase 2 | Pending |
 | PERS-03 | Phase 2 | Pending |

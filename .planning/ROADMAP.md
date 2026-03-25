@@ -12,7 +12,7 @@ This milestone adds durability, transparency, and ease of setup to an existing w
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Code Quality** - Resolve six PR #3 follow-ups to leave the codebase clean before adding new features
+- [x] **Phase 1: Code Quality** - Resolve six PR #3 follow-ups to leave the codebase clean before adding new features (completed 2026-03-25)
 - [ ] **Phase 2: Persistence & Resilience** - Add SQLite snapshot storage, historical trend charts, caching improvements, and rate-limit resilience
 - [ ] **Phase 3: Scoring Transparency & Onboarding** - Surface per-signal score breakdowns, customizable weights, and a first-run setup wizard
 - [ ] **Phase 4: OAuth & Slack Verification** - Add OAuth auth flows for all three integrations and verify Slack with a live workspace
@@ -30,9 +30,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Manual mode cache reads enforce TTL at read time — stale entries are not served after navigating away and back
   4. Health summary response includes `hasImport` flag, allowing the client to distinguish "no import yet" from "import returned zero recommendations"
   5. Tests for smart quote normalization and JSON extraction import from `claude.ts` directly rather than reimplementing the functions
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 01-01-PLAN.md — Consolidate extractJSON/normalizeQuotes into claude.ts, update tests
+- [x] 01-01-PLAN.md — Consolidate extractJSON/normalizeQuotes into claude.ts, update tests
 - [x] 01-02-PLAN.md — Fix force-refresh, add TTL checks, add hasImport flag
 
 ### Phase 2: Persistence & Resilience
@@ -95,7 +95,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Code Quality | 0/2 | Planning complete | - |
+| 1. Code Quality | 2/2 | Complete   | 2026-03-25 |
 | 2. Persistence & Resilience | 0/? | Not started | - |
 | 3. Scoring Transparency & Onboarding | 0/? | Not started | - |
 | 4. OAuth & Slack Verification | 0/? | Not started | - |
