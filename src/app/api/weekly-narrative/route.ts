@@ -9,26 +9,42 @@ import { getOrFetch, buildCacheKey, cache, CACHE_TTL } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
+    // Parse force param first — must happen before any early returns so manual mode
+    // can honor force-refresh (clears the cached import for re-import).
+    const force = request.nextUrl.searchParams.get("force") === "true";
     const provider = getProvider();
+
     if (provider === "manual") {
-      // Check if there's a manually-imported response (separate key from AI-generated cache)
+      // Force refresh in manual mode: clear the cached import so the user can re-import.
+      // Without this, force-refresh would re-serve the existing import unchanged.
+      if (force) {
+        cache.delete("manual:weekly-narrative");
+      }
+
       const cached = cache.get<{ narrative: string; weekOf: string; generatedAt: string }>("manual:weekly-narrative");
       if (cached) {
-        return Response.json({
-          data: { ...cached.value, manualMode: true },
-          fetchedAt: new Date(cached.cachedAt).toISOString(),
-          cached: true,
-        });
+        // TTL check at read time — the 2x cleanup timer is a memory safety net only,
+        // not the authoritative TTL gate. This prevents stale imports after navigate-away/back.
+        const age = Date.now() - cached.cachedAt;
+        if (age > cached.ttlMs) {
+          cache.delete("manual:weekly-narrative");
+          // fall through to "no import" response below
+        } else {
+          return Response.json({
+            data: { ...cached.value, manualMode: true },
+            fetchedAt: new Date(cached.cachedAt).toISOString(),
+            cached: true,
+          });
+        }
       }
-      // No imported response yet — return manualMode flag so UI shows export/import controls
+
+      // No imported response yet (or TTL expired or force-cleared)
       return Response.json({ data: { manualMode: true }, fetchedAt: new Date().toISOString() });
     }
 
     if (!isAIConfigured()) {
       return Response.json({ notConfigured: true });
     }
-
-    const force = request.nextUrl.searchParams.get("force") === "true";
 
     const result = await getOrFetch(
       "weekly-narrative",
