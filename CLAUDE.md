@@ -201,3 +201,152 @@ Key variables:
 - React hooks must be called before any conditional early returns (Rules of Hooks). The LinearSection component has multiple early returns — all hooks are declared at the top.
 - Local LLMs (Ollama/llama3) frequently ignore prompt instructions. The codebase compensates with: JSON mode for structured output, temperature 0 for consistency, post-processing to strip hallucinated content, and deterministic scoring that doesn't depend on the LLM.
 - Slack and AI (Ollama/Anthropic) features have not been fully tested with live integrations.
+
+<!-- GSD:project-start source:PROJECT.md -->
+## Project
+
+**Team Health Dashboard**
+
+An AI-powered engineering team health dashboard that pulls data from GitHub, Linear, and Slack APIs. Uses a deterministic scoring system for the health score and an LLM (Ollama, Anthropic, or manual/clipboard mode) for narrative insights. Built with Next.js 16 (App Router), TypeScript, React 19, Tailwind CSS, and Recharts.
+
+**Core Value:** Give engineering leaders a single view of team health — one score, backed by real data from the tools they already use — so problems surface before they become crises.
+
+### Constraints
+
+- **Tech stack**: Next.js 16 + React 19 + TypeScript + Tailwind — established, not changing
+- **No heavy database**: Persistence for trending should be lightweight (SQLite, JSON files, or similar)
+- **Backward compatible**: Existing env var configuration must continue to work; new features (OAuth, onboarding) are additive
+- **Deterministic scoring**: Health score must never depend on LLM output
+<!-- GSD:project-end -->
+
+<!-- GSD:stack-start source:research/STACK.md -->
+## Technology Stack
+
+## Persistence — Historical Trending
+### Recommended: `better-sqlite3` v12.8.0
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `better-sqlite3` | 12.8.0 | Store daily health score snapshots for trend charts | Synchronous, zero-latency, file-based. No separate process. Perfect for a single-server local tool. Native Node.js bindings — works in Next.js API routes (not Edge Runtime). |
+| `@types/better-sqlite3` | 7.6.13 | TypeScript types | Official types package. |
+## Server-Side Caching
+### Recommended: In-memory module-level cache (already exists at `lib/cache.ts`)
+- ETags for HTTP-level caching
+- Rate-limit-aware stale data serving with a UI banner
+## OAuth Authentication
+### Recommended: Arctic v3.7.0 + custom session handling
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `arctic` | 3.7.0 | OAuth 2.0 provider abstractions (GitHub, Linear, Slack) | Lightweight (no framework coupling), handles PKCE, state, token exchange. Supports all three providers this project needs. Works with any framework including Next.js App Router. |
+| `oslo` | 1.2.1 | Cryptographic utilities (CSRF tokens, session IDs) | Companion to Arctic. Provides `generateState()`, `generateCodeVerifier()`, secure random bytes. From the same author. |
+## Notifications / Alerts
+### Recommended: Browser Notifications API (no library) + optional Resend v6.9.4
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `resend` | 6.9.4 | Transactional email for score-drop alerts | Minimal API surface, excellent TypeScript types, free tier (100 emails/day). Integrates in one function call from a Next.js API route. |
+## Export / PDF Generation
+### Recommended: `html-to-image` v1.11.13 for screenshots + `jspdf` v4.2.1 for PDF wrapping
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `html-to-image` | 1.11.13 | Capture dashboard sections as PNG/JPEG | Client-side, no server process needed. Works with SVG charts (Recharts). More actively maintained than `html2canvas` (last release 2021). |
+| `jspdf` | 4.2.1 | Wrap captured images into a PDF | Lightweight, client-side. Combine with `html-to-image` output to produce a PDF export. |
+## Accessibility
+### Recommended: `axe-core` v4.11.1 (dev only) + `focus-trap-react` v12.0.0 + Radix UI primitives
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `@axe-core/react` | 4.11.1 | Dev-time accessibility violation logging in browser console | Zero production cost. Catches common ARIA issues during development. Run only in `development` env. |
+| `focus-trap-react` | 12.0.0 | Trap keyboard focus in modals (Settings, ManualAI) | The project already has modal components. Keyboard users must not be able to tab outside an open modal. `focus-trap-react` handles this with one wrapper component. |
+| `@radix-ui/react-dialog` | 1.1.15 | Accessible modal primitive (optional replacement) | If refactoring existing modals, Radix Dialog handles focus trap, ARIA roles, and keyboard dismissal out of the box. Trade-off: migration cost. Add only when touching a specific modal. |
+## Onboarding Wizard
+### Recommended: No new library — extend existing Settings UI with wizard state machine
+## Form Validation (for Settings UI and Onboarding)
+### Recommended: `zod` v4.3.6 (already familiar pattern, no `react-hook-form` needed)
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `zod` | 4.3.6 | Validate config values (URLs, API key formats, OAuth tokens) before saving | Zod v4 is faster than v3, same API. Use for server-side validation in `/api/config`. |
+## Rate Limiting / Retry Logic
+### Recommended: No library — implement exponential backoff in `lib/github.ts`, `lib/linear.ts`, `lib/slack.ts`
+## Summary: What to Install
+# Persistence
+# OAuth (if OAuth milestone is being built)
+# Export
+# Accessibility (dev only)
+# Accessibility (production — keyboard traps)
+# Validation (server-side only)
+# Email notifications (optional, only if email alerts are in scope)
+## Alternatives Considered
+| Category | Recommended | Alternative | Why Not |
+|----------|-------------|-------------|---------|
+| Persistence | `better-sqlite3` | Drizzle + SQLite | ORM overhead for 1-2 table schema |
+| Persistence | `better-sqlite3` | JSON files | Race conditions with concurrent API routes |
+| OAuth | Arctic | NextAuth v5 | Multi-user auth framework; project has no user accounts |
+| OAuth | Arctic | Passport.js | Express-centric, poor App Router ergonomics |
+| PDF | `html-to-image` + `jspdf` | `@react-pdf/renderer` | Requires parallel component tree, high maintenance burden |
+| PDF | `html-to-image` + `jspdf` | Puppeteer | 300MB headless browser, server infrastructure requirement |
+| Screenshot | `html-to-image` | `html2canvas` | Last updated 2021, poor SVG support |
+| Notifications | Web Notifications API | Push + service worker | PWA complexity unwarranted for internal tool |
+| Onboarding | Extend Settings modal | react-joyride | Tooltip tours are wrong UX for credential-entry onboarding |
+| Accessibility | axe-core + focus-trap | @headlessui/react | High migration cost to retrofit existing components |
+| Caching | Extend `lib/cache.ts` | Redis | Separate process, overkill for local single-server tool |
+| Form validation | `zod` | `react-hook-form` | Over-engineering for a small settings form |
+## Confidence Assessment
+| Area | Confidence | Rationale |
+|------|------------|-----------|
+| `better-sqlite3` for persistence | HIGH | Mature library, standard for Next.js local persistence, version verified from npm |
+| Arctic for OAuth | MEDIUM | Version verified, well-known in Next.js ecosystem. Could not verify via Context7. |
+| `html-to-image` over `html2canvas` | MEDIUM | Maintenance comparison based on known release history; SVG behavior with Recharts should be spiked |
+| Web Notifications API | HIGH | W3C standard, stable, no library dependency |
+| Resend for email | MEDIUM | Well-regarded library, version verified, pricing tier not confirmed |
+| `focus-trap-react` | HIGH | Standard accessible modal pattern, version verified |
+| `@axe-core/react` | HIGH | Industry standard dev-time accessibility testing, version verified |
+| `zod` v4 | HIGH | Version verified, widely used, backward-compatible API from v3 |
+| "No library" onboarding | HIGH | Based on existing code structure analysis |
+## Sources
+- npm registry: version lookups for all packages (2026-03-24)
+- CLAUDE.md: existing stack constraints and patterns
+- PROJECT.md: explicit "no heavy database" and "out of scope" constraints
+- W3C Web Notifications API specification (stable standard)
+- Training knowledge for library maturity/ecosystem status (flagged where MEDIUM confidence)
+<!-- GSD:stack-end -->
+
+<!-- GSD:conventions-start source:CONVENTIONS.md -->
+## Conventions
+
+Conventions not yet established. Will populate as patterns emerge during development.
+<!-- GSD:conventions-end -->
+
+<!-- GSD:architecture-start source:ARCHITECTURE.md -->
+## Architecture
+
+Architecture not yet mapped. Follow existing patterns found in the codebase.
+<!-- GSD:architecture-end -->
+
+<!-- GSD:workflow-start source:GSD defaults -->
+## Phase Completion Checklist (MANDATORY)
+
+Every phase — no exceptions — MUST follow this sequence:
+
+1. **Branch first**: Create a feature branch (e.g., `feature/phase-N-description`) before writing any code. Never work on main.
+2. **Update docs**: Before the final commit, update `README.md` and `ARCHITECTURE.md` to reflect any changes from the phase (new features, routes, components, config, scoring, etc.).
+3. **Create a PR**: Push the branch (with user permission) and open a pull request via `gh pr create`.
+4. **Run code review**: Invoke the `code-review` skill against the PR before considering the phase complete.
+
+Do NOT skip any of these steps. Do NOT mark a phase as complete until all four are done.
+
+## GSD Workflow Enforcement
+
+Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
+
+Use these entry points:
+- `/gsd:quick` for small fixes, doc updates, and ad-hoc tasks
+- `/gsd:debug` for investigation and bug fixing
+- `/gsd:execute-phase` for planned phase work
+
+Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
+<!-- GSD:workflow-end -->
+
+<!-- GSD:profile-start -->
+## Developer Profile
+
+> Profile not yet configured. Run `/gsd:profile-user` to generate your developer profile.
+> This section is managed by `generate-claude-profile` -- do not edit manually.
+<!-- GSD:profile-end -->
