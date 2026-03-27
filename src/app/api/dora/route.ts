@@ -15,7 +15,8 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const lookbackParam = searchParams.get("lookbackDays");
-    const lookbackDays = lookbackParam ? parseInt(lookbackParam, 10) : 30;
+    const lookbackParsed = parseInt(lookbackParam ?? "", 10);
+    const lookbackDays = !isNaN(lookbackParsed) && lookbackParsed > 0 ? lookbackParsed : 30;
     const force = searchParams.get("force") === "true";
 
     const source =
