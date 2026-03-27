@@ -4,12 +4,16 @@ export function Card({
   children,
   className,
   onClick,
+  onKeyDown,
   title,
+  "aria-label": ariaLabel,
 }: {
   children: React.ReactNode;
   className?: string;
   onClick?: () => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   title?: string;
+  "aria-label"?: string;
 }) {
   return (
     <div
@@ -18,7 +22,11 @@ export function Card({
         className
       )}
       onClick={onClick}
+      onKeyDown={onKeyDown}
       title={title}
+      aria-label={ariaLabel}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
     >
       {children}
     </div>

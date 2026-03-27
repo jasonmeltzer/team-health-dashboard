@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import FocusTrap from "focus-trap-react";
 import { cn } from "@/lib/utils";
 
 interface ManualAIResponseModalProps {
@@ -25,6 +26,8 @@ export function ManualAIResponseModal({
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -38,10 +41,20 @@ export function ManualAIResponseModal({
   }, [open]);
 
   useEffect(() => {
-    if (showPaste) {
-      setTimeout(() => textareaRef.current?.focus(), 100);
-    }
+    if (!showPaste) return;
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => textareaRef.current?.focus(), 100);
+    return () => {
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    };
   }, [showPaste]);
+
+  // Cleanup close timer on unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
 
   if (!open) return null;
 
@@ -67,7 +80,7 @@ export function ManualAIResponseModal({
     await loadFile(file);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (!response.trim()) {
       setError("No response to import. Upload a file or paste text first.");
       return;
@@ -93,7 +106,8 @@ export function ManualAIResponseModal({
       setSuccess(true);
       // Start the refetch immediately, close after a brief flash of success
       onImported();
-      setTimeout(() => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = setTimeout(() => {
         onClose();
       }, 600);
     } catch {
@@ -101,7 +115,7 @@ export function ManualAIResponseModal({
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [onImported, onClose, type, response]);
 
   const isHealthSummary = type === "health-summary";
   const title = isHealthSummary ? "Import Health Summary" : "Import Weekly Narrative";
@@ -113,10 +127,16 @@ export function ManualAIResponseModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="flex w-full max-w-lg flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+      <FocusTrap active={open} focusTrapOptions={{ initialFocus: false, escapeDeactivates: true, onDeactivate: onClose }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="manual-ai-modal-title"
+        className="flex w-full max-w-lg flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-700">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          <h2 id="manual-ai-modal-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             {title}
           </h2>
           <button
@@ -134,6 +154,15 @@ export function ManualAIResponseModal({
           {/* Primary: file upload */}
           <div
             onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-label="Upload AI response file"
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={handleDrop}
@@ -243,6 +272,7 @@ export function ManualAIResponseModal({
           </button>
         </div>
       </div>
+      </FocusTrap>
     </div>
   );
 }

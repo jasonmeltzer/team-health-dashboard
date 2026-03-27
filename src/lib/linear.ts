@@ -84,6 +84,9 @@ export async function fetchLinearMetrics(
     { teamId }
   );
 
+  if (!cycleData.team) {
+    return buildContinuousMetrics(teamId, lookbackDays);
+  }
   const cycles = cycleData.team.cycles.nodes;
 
   // If mode is explicitly "cycles", use cycles even if empty

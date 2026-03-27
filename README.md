@@ -208,7 +208,7 @@ Contributions welcome! See [ARCHITECTURE.md](ARCHITECTURE.md) for system interna
 - **Team-level filtering** — support for multiple repos/teams/squads
 - **Notifications** — alert when the health score drops to Warning or Critical
 - **Slack team filtering** — track only specified team members, not all channel participants
-- **Accessibility** — ARIA labels, keyboard navigation, screen reader support
+- ~~**Accessibility** — ARIA labels, keyboard navigation, screen reader support~~ *(done — focus traps, keyboard nav, aria-labels added in Phase 01.1)*
 
 ## License
 

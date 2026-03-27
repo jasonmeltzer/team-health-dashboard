@@ -15,9 +15,11 @@ export async function GET(request: NextRequest) {
     }
 
     const staleDaysParam = searchParams.get("staleDays");
-    const staleDays = staleDaysParam ? parseInt(staleDaysParam, 10) : 7;
+    const staleDaysParsed = parseInt(staleDaysParam ?? "", 10);
+    const staleDays = !isNaN(staleDaysParsed) && staleDaysParsed > 0 ? staleDaysParsed : 7;
     const lookbackParam = searchParams.get("lookbackDays");
-    const lookbackDays = lookbackParam ? parseInt(lookbackParam, 10) : 30;
+    const lookbackParsed = parseInt(lookbackParam ?? "", 10);
+    const lookbackDays = !isNaN(lookbackParsed) && lookbackParsed > 0 ? lookbackParsed : 30;
     const force = searchParams.get("force") === "true";
 
     const cacheKey = buildCacheKey("github", { staleDays, lookbackDays });

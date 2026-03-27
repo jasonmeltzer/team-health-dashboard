@@ -1,6 +1,6 @@
 # Architecture
 
-> Last updated: 2026-03-21. Update this document when making structural changes.
+> Last updated: 2026-03-27. Update this document when making structural changes.
 
 ## Overview
 
@@ -398,10 +398,20 @@ graph TD
 - **Deferred slider commits** — sliders use separate visual and committed state to avoid API calls on every drag
 - **Stale-while-revalidate** — during refetch, existing data stays visible with a pulsing animation
 - **Per-section refresh** — each section has its own refresh button; hidden during rate limit states
+- **AbortController cleanup** — `useApiData` aborts in-flight fetches on unmount/URL change to prevent memory leaks
+- **Modal focus traps** — `focus-trap-react` wraps Settings and ManualAI modals; focus cycles within the modal
+- **Keyboard accessibility** — all interactive non-button elements (MetricCard, table rows, heatmap cells, file upload) respond to Enter/Space with `role="button"` and `tabIndex={0}`
+- **Accessible labels** — icon-only buttons use `aria-label`; modals use `aria-labelledby` and `aria-modal="true"`
 
 ### Theme System
 
-`ThemeProvider.tsx` — React context with `useTheme()` hook. Reads/writes `localStorage`. Defaults to dark mode. Toggles the `dark` class on `<html>`. Light mode is labeled "Incorrect Mode" in the UI.
+`ThemeProvider.tsx` — React context with `useTheme()` hook. Reads/writes `localStorage`. Defaults to dark mode. Toggles the `dark` class on `<html>`. Light mode is labeled "Incorrect Mode" in the UI. The theme toggle button uses `suppressHydrationWarning` to avoid server/client mismatch (theme is read from `localStorage` on the client).
+
+### Security
+
+- **SSRF protection** — `validateOllamaUrl()` in `claude.ts` rejects non-http/https schemes before any Ollama fetch
+- **Input validation** — API route query params (`staleDays`, `lookbackDays`) guarded with `isNaN` + `> 0` checks
+- **Null guards** — Linear client handles missing `team` in GraphQL response gracefully
 
 ---
 

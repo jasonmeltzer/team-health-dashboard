@@ -49,6 +49,21 @@ export function isAIConfigured(): boolean {
   return true; // Ollama runs locally, no key needed
 }
 
+function validateOllamaUrl(raw: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error(`OLLAMA_BASE_URL is not a valid URL: "${raw}"`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(
+      `OLLAMA_BASE_URL must use http:// or https://, got "${parsed.protocol}"`
+    );
+  }
+  return raw;
+}
+
 async function chatCompletion(
   system: string,
   userMessage: string,
@@ -71,7 +86,8 @@ async function chatCompletion(
   }
 
   // Ollama via OpenAI-compatible API
-  const baseUrl = getConfig("OLLAMA_BASE_URL") || "http://localhost:11434";
+  const baseUrlRaw = getConfig("OLLAMA_BASE_URL") || "http://localhost:11434";
+  const baseUrl = validateOllamaUrl(baseUrlRaw);
   const model = getConfig("OLLAMA_MODEL") || "llama3";
 
   const body: Record<string, unknown> = {

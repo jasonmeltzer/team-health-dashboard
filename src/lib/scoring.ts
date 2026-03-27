@@ -105,6 +105,14 @@ function scoreGitHub(github: PRMetrics): ScoreDeduction[] {
 
 /* ─── Linear (max 30 pts) ─────────────────────────────────────────────── */
 
+/** True statistical median of a sorted numeric array. Caller must ensure array is non-empty and sorted ascending. */
+function median(sorted: number[]): number {
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
 function scoreLinear(linear: LinearMetrics): ScoreDeduction[] {
   const deductions: ScoreDeduction[] = [];
 
@@ -131,17 +139,17 @@ function scoreLinear(linear: LinearMetrics): ScoreDeduction[] {
   let imbalancePts = 0;
   let imbalanceDetail = "Balanced";
   if (workloads.length >= 2) {
-    const median = workloads[Math.floor(workloads.length / 2)];
+    const med = median(workloads);
     const max = workloads[workloads.length - 1];
-    if (median > 0) {
-      const ratio = max / median;
+    if (med > 0) {
+      const ratio = max / med;
       if (ratio > 2.5) imbalancePts = 6;
       else if (ratio > 2) imbalancePts = 4;
       else if (ratio > 1.5) imbalancePts = 2;
       imbalanceDetail =
         imbalancePts > 0
-          ? `Busiest: ${max} items, median: ${median} (${ratio.toFixed(1)}×)`
-          : `Busiest: ${max} items, median: ${median}`;
+          ? `Busiest: ${max} items, median: ${med} (${ratio.toFixed(1)}×)`
+          : `Busiest: ${max} items, median: ${med}`;
     }
   }
   deductions.push({
