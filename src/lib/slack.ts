@@ -200,12 +200,11 @@ export async function fetchSlackMetrics(
     .sort((a, b) => b.messagesSent - a.messagesSent);
 
   const totalMessages = allMessages.length;
+  const nonZeroEntries = responseTimeTrend.filter((r) => r.avgResponseMinutes > 0);
   const avgResponse =
-    responseTimeTrend.length > 0
+    responseTimeTrend.length > 0 && nonZeroEntries.length > 0
       ? Math.round(
-          (responseTimeTrend.reduce((s, r) => s + r.avgResponseMinutes, 0) /
-            responseTimeTrend.filter((r) => r.avgResponseMinutes > 0).length ||
-            1) * 10
+          (responseTimeTrend.reduce((s, r) => s + r.avgResponseMinutes, 0) / nonZeroEntries.length) * 10
         ) / 10
       : 0;
 
