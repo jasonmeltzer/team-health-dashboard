@@ -125,7 +125,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <FocusTrap active={open} focusTrapOptions={{ initialFocus: false, escapeDeactivates: false }}>
+      <FocusTrap active={open} focusTrapOptions={{ initialFocus: false, escapeDeactivates: true, onDeactivate: onClose }}>
       <div
         role="dialog"
         aria-modal="true"
