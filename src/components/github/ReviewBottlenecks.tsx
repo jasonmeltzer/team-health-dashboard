@@ -28,7 +28,16 @@ export function ReviewBottlenecks({ data }: { data: ReviewBottleneck[] }) {
 
   return (
     <div className="space-y-3">
-      <div style={{ height: chartHeight }}>
+      <div
+        style={{ height: chartHeight }}
+        role="img"
+        aria-label="Review bottlenecks bar chart. Click a bar to expand PR details."
+        tabIndex={0}
+        onKeyDown={(e) => {
+          // Chart interaction is mouse-only; keyboard users can see the summary below
+          if (e.key === "Enter" || e.key === " ") e.preventDefault();
+        }}
+      >
         <ResponsiveContainer width="100%" height={chartHeight} minWidth={0}>
           <BarChart
             data={data}

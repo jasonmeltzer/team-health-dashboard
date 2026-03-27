@@ -12,6 +12,7 @@ export function MetricCard({
   tooltip,
   disabled,
   disabledTooltip,
+  clickLabel,
 }: {
   label: string;
   value: string | number;
@@ -22,6 +23,7 @@ export function MetricCard({
   tooltip?: string;
   disabled?: boolean;
   disabledTooltip?: string;
+  clickLabel?: string;
 }) {
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -34,6 +36,13 @@ export function MetricCard({
       )}
       onClick={disabled ? undefined : onClick}
       title={disabled ? disabledTooltip : undefined}
+      aria-label={!disabled && onClick ? (clickLabel || `View ${label}`) : undefined}
+      onKeyDown={!disabled && onClick ? (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      } : undefined}
     >
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
         {label}

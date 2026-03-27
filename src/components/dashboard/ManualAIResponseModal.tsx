@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import FocusTrap from "focus-trap-react";
 import { cn } from "@/lib/utils";
 
 interface ManualAIResponseModalProps {
@@ -126,10 +127,16 @@ export function ManualAIResponseModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="flex w-full max-w-lg flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+      <FocusTrap active={open} focusTrapOptions={{ initialFocus: false, escapeDeactivates: false }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="manual-ai-modal-title"
+        className="flex w-full max-w-lg flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-700">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          <h2 id="manual-ai-modal-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             {title}
           </h2>
           <button
@@ -147,6 +154,15 @@ export function ManualAIResponseModal({
           {/* Primary: file upload */}
           <div
             onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-label="Upload AI response file"
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={handleDrop}
@@ -256,6 +272,7 @@ export function ManualAIResponseModal({
           </button>
         </div>
       </div>
+      </FocusTrap>
     </div>
   );
 }
