@@ -31,7 +31,7 @@ export function useApiData<T>(url: string, refreshKey: number) {
   // Derived: true when refetching with existing data (not initial load)
   const refreshing = loading && data != null;
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
     // If refreshKey increased, this is a manual refresh — force bypass cache
     const isForceRefresh = refreshKey > prevRefreshKey.current;
     prevRefreshKey.current = refreshKey;
@@ -65,7 +65,7 @@ export function useApiData<T>(url: string, refreshKey: number) {
     const fetchUrl = isForceRefresh ? `${url}${separator}force=true` : url;
 
     try {
-      const res = await fetch(fetchUrl);
+      const res = await fetch(fetchUrl, { signal });
       const json: ApiResponse<T> = await res.json();
       if (json.rateLimited) {
         setRateLimited(true);
@@ -101,19 +101,25 @@ export function useApiData<T>(url: string, refreshKey: number) {
         });
       }
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return; // silently ignore aborted requests
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
-      setLoading(false);
+      // Only update loading state if the request was not aborted (component may be unmounting)
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }, [url, refreshKey]);
 
   useEffect(() => {
-    fetchData();
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
   }, [fetchData]);
 
   const refetch = useCallback(() => {
     explicitRefetch.current = true;
-    return fetchData();
+    return fetchData(); // No signal — user-initiated, not lifecycle-managed
   }, [fetchData]);
 
   return { data, loading, refreshing, error, notConfigured, setupHint, fetchedAt, cached, rateLimited, rateLimitReset, refetch };

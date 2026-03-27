@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -25,6 +25,14 @@ export function VelocityChart({
 }) {
   // Suppress tooltip briefly after clicking so it doesn't stick
   const [suppressTooltip, setSuppressTooltip] = useState(false);
+  const suppressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup suppress timer on unmount
+  useEffect(() => {
+    return () => {
+      if (suppressTimerRef.current) clearTimeout(suppressTimerRef.current);
+    };
+  }, []);
 
   if (data.length === 0) {
     return (
@@ -44,7 +52,8 @@ export function VelocityChart({
             if (state?.activeLabel) {
               onBarClick(String(state.activeLabel));
               setSuppressTooltip(true);
-              setTimeout(() => setSuppressTooltip(false), 300);
+              if (suppressTimerRef.current) clearTimeout(suppressTimerRef.current);
+              suppressTimerRef.current = setTimeout(() => setSuppressTooltip(false), 300);
             }
           } : undefined}
         >

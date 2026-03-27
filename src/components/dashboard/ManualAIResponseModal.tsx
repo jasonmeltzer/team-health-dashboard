@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
 interface ManualAIResponseModalProps {
@@ -25,6 +25,8 @@ export function ManualAIResponseModal({
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -38,10 +40,20 @@ export function ManualAIResponseModal({
   }, [open]);
 
   useEffect(() => {
-    if (showPaste) {
-      setTimeout(() => textareaRef.current?.focus(), 100);
-    }
+    if (!showPaste) return;
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => textareaRef.current?.focus(), 100);
+    return () => {
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    };
   }, [showPaste]);
+
+  // Cleanup close timer on unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
 
   if (!open) return null;
 
@@ -67,7 +79,7 @@ export function ManualAIResponseModal({
     await loadFile(file);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (!response.trim()) {
       setError("No response to import. Upload a file or paste text first.");
       return;
@@ -93,7 +105,8 @@ export function ManualAIResponseModal({
       setSuccess(true);
       // Start the refetch immediately, close after a brief flash of success
       onImported();
-      setTimeout(() => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = setTimeout(() => {
         onClose();
       }, 600);
     } catch {
@@ -101,7 +114,7 @@ export function ManualAIResponseModal({
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [onImported, onClose, type, response]);
 
   const isHealthSummary = type === "health-summary";
   const title = isHealthSummary ? "Import Health Summary" : "Import Weekly Narrative";
