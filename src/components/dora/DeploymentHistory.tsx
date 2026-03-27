@@ -33,12 +33,12 @@ export function DeploymentHistory({
 
   // Auto-expand and scroll into view when filter is applied
   useEffect(() => {
-    if (filter) {
-      setExpanded(true);
-      setTimeout(() => {
-        containerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 100);
-    }
+    if (!filter) return;
+    setExpanded(true);
+    const timer = setTimeout(() => {
+      containerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+    return () => clearTimeout(timer);
   }, [filter]);
 
   // Apply filter: match by week and effective status (same logic as computeTrend in dora.ts)

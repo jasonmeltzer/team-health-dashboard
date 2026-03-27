@@ -245,6 +245,16 @@ function SummaryTab({
                     prev === row.state ? null : row.state
                   )
                 }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setExpandedState((prev) =>
+                      prev === row.state ? null : row.state
+                    );
+                  }
+                }}
+                role="button"
+                tabIndex={0}
                 className={cn(
                   "border-b border-zinc-100 cursor-pointer transition-colors dark:border-zinc-800",
                   expandedState === row.state
@@ -600,6 +610,14 @@ function AssigneeTab({
                           isExpanded ? null : { assignee, state }
                         )
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setExpandedCell(isExpanded ? null : { assignee, state });
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                       className={cn(
                         "py-2 text-center cursor-pointer transition-opacity",
                         isExpanded && "ring-2 ring-zinc-400 ring-inset rounded"

@@ -324,7 +324,15 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
         <div
           className="relative flex-shrink-0 cursor-pointer"
           onClick={() => setShowBreakdown((prev) => !prev)}
-          title="Click to see score breakdown"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setShowBreakdown((prev) => !prev);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="View score breakdown"
         >
           <svg className="h-20 w-20 -rotate-90" viewBox="0 0 36 36">
             <path
