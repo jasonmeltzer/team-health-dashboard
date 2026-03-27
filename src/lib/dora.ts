@@ -36,6 +36,16 @@ export async function fetchDORAMetrics(
     "production-bug",
   ];
 
+  // Start incident fetch immediately — it is independent of the deployment source.
+  // Incidents and deployment source resolution run in parallel (CR-09).
+  const incidentsPromise = fetchIncidents(
+    octokit,
+    owner,
+    repo,
+    since,
+    incidentLabels
+  );
+
   // Fetch deployments, releases, or merged PRs
   let deployments: DeploymentRecord[];
   let usedSource: "deployments" | "releases" | "merges";
@@ -56,7 +66,7 @@ export async function fetchDORAMetrics(
     deployments = await fetchMergedPRs(octokit, owner, repo, since);
     usedSource = "merges";
   } else {
-    // auto: try deployments → releases → merged PRs
+    // auto: sequential waterfall is by design — must check each source before falling back
     deployments = await fetchDeployments(
       octokit,
       owner,
@@ -77,14 +87,8 @@ export async function fetchDORAMetrics(
     }
   }
 
-  // Fetch incidents (labeled issues + reverted PRs)
-  const incidents = await fetchIncidents(
-    octokit,
-    owner,
-    repo,
-    since,
-    incidentLabels
-  );
+  // Await the incident fetch that was started in parallel above
+  const incidents = await incidentsPromise;
 
   // Correlate incidents to deployments
   correlateIncidents(deployments, incidents);

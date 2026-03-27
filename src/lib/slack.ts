@@ -14,14 +14,22 @@ export async function fetchSlackMetrics(
   const client = new WebClient(getConfig("SLACK_BOT_TOKEN"));
   const sevenDaysAgo = Math.floor(daysAgo(7).getTime() / 1000).toString();
 
-  // Fetch user list for name mapping
-  const usersRes = await client.users.list({ limit: 200 });
+  // Fetch user list for name mapping — cursor pagination capped at 1000 users (5 pages x 200/page)
   const userMap = new Map<string, string>();
-  for (const user of usersRes.members || []) {
-    if (user.id && user.real_name && !user.is_bot) {
-      userMap.set(user.id, user.real_name);
+  let cursor: string | undefined;
+  let pagesFetched = 0;
+  const MAX_USER_PAGES = 5;
+
+  do {
+    const usersRes = await client.users.list({ limit: 200, cursor });
+    for (const user of usersRes.members || []) {
+      if (user.id && user.real_name && !user.is_bot) {
+        userMap.set(user.id, user.real_name);
+      }
     }
-  }
+    cursor = usersRes.response_metadata?.next_cursor || undefined;
+    pagesFetched++;
+  } while (cursor && pagesFetched < MAX_USER_PAGES);
 
   // Fetch channel info and messages
   const channelActivity: ChannelActivity[] = [];

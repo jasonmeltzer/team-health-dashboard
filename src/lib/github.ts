@@ -87,7 +87,7 @@ export async function fetchGitHubMetrics(
 
   // Cycle time trend (using first review from prReviewsMap)
   for (const pr of mergedPRs) {
-    const week = getISOWeek(new Date(pr.created_at));
+    const week = getISOWeek(new Date(pr.merged_at!));
     const cycleHours = hoursBetween(
       new Date(pr.created_at),
       new Date(pr.merged_at!)
