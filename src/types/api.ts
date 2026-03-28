@@ -3,6 +3,7 @@ export interface ApiResponse<T> {
   error?: string;
   fetchedAt?: string;
   cached?: boolean;
+  stale?: boolean;        // true when data is from expired cache being revalidated
   notConfigured?: boolean;
   setupHint?: string;
   rateLimited?: boolean;

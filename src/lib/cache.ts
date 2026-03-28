@@ -1,6 +1,8 @@
 // Server-side caching layer with pluggable storage backend.
 // Currently uses in-memory Map; swap InMemoryCacheStore for filesystem/Redis/SQLite later.
 
+import { getConfig } from "@/lib/config";
+
 export interface CacheEntry<T> {
   value: T;
   cachedAt: number; // Date.now() when stored
@@ -67,6 +69,21 @@ class InMemoryCacheStore implements CacheStore {
 const globalForCache = globalThis as typeof globalThis & { __apiCache?: CacheStore };
 export const cache: CacheStore = globalForCache.__apiCache ??= new InMemoryCacheStore();
 
+// Track in-flight background revalidations to prevent duplicates
+const pendingBackgroundFetches = new Set<string>();
+
+function scheduleBackgroundFetch<T>(key: string, ttlMs: number, fetcher: () => Promise<T>) {
+  if (pendingBackgroundFetches.has(key)) return;
+  pendingBackgroundFetches.add(key);
+  Promise.resolve()
+    .then(() => fetcher())
+    .then((value) => {
+      cache.set(key, { value, cachedAt: Date.now(), ttlMs });
+    })
+    .catch(() => { /* stale data remains; next request will retry */ })
+    .finally(() => pendingBackgroundFetches.delete(key));
+}
+
 // Default TTLs per source
 export const CACHE_TTL = {
   github: 15 * 60 * 1000, // 15 minutes
@@ -77,14 +94,30 @@ export const CACHE_TTL = {
   weeklyNarrative: 15 * 60 * 1000, // 15 minutes (expensive LLM call)
 } as const;
 
+/**
+ * Returns the TTL for a cache source, checking user config first, then defaults.
+ * Config keys: CACHE_TTL_GITHUB, CACHE_TTL_LINEAR, CACHE_TTL_HEALTH_SUMMARY, etc.
+ */
+export function getTTL(source: keyof typeof CACHE_TTL): number {
+  const envKey = `CACHE_TTL_${source.toUpperCase().replace(/([a-z])([A-Z])/g, "$1_$2").toUpperCase()}`;
+  const configured = getConfig(envKey);
+  if (configured) {
+    const parsed = parseInt(configured, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return CACHE_TTL[source];
+}
+
 export interface GetOrFetchResult<T> {
   value: T;
   cached: boolean;
   cachedAt: string; // ISO string
+  stale?: boolean;  // true when serving expired-but-valid stale data
 }
 
 /**
  * Returns cached value if fresh, otherwise calls fetcher and caches the result.
+ * SWR behavior: when cache is stale, serves stale data immediately and revalidates in background.
  * On fetcher error, serves stale cached data if available (stale-on-error).
  */
 export async function getOrFetch<T>(
@@ -105,6 +138,14 @@ export async function getOrFetch<T>(
         cachedAt: new Date(existing.cachedAt).toISOString(),
       };
     }
+    // Stale — serve immediately, revalidate in background
+    scheduleBackgroundFetch(key, ttlMs, fetcher);
+    return {
+      value: existing.value,
+      cached: true,
+      cachedAt: new Date(existing.cachedAt).toISOString(),
+      stale: true,
+    };
   }
 
   // Fetch fresh data
@@ -128,6 +169,7 @@ export async function getOrFetch<T>(
         value: existing.value,
         cached: true,
         cachedAt: new Date(existing.cachedAt).toISOString(),
+        stale: true,
       };
     }
     throw error;
