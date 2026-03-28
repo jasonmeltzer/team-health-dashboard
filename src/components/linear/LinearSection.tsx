@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { RateLimitBanner, RevalidatingBanner } from "@/components/ui/RateLimitBanner";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { cn } from "@/lib/utils";
 import { VelocityChart } from "./VelocityChart";
@@ -135,7 +136,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
   const [sliderDays, setSliderDays] = useState(42);
   const [committedDays, setCommittedDays] = useState(42);
   const [selectedCycleName, setSelectedCycleName] = useState<string | null>(null);
-  const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, refetch } = useApiData<LinearMetrics>(
+  const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, stale, revalidating, rateLimited, rateLimitReset, refetch } = useApiData<LinearMetrics>(
     `/api/linear?mode=${viewMode}&days=${committedDays}`,
     refreshKey
   );
@@ -183,6 +184,32 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
     );
   }
 
+  if (rateLimited && !data) {
+    return (
+      <div>
+        <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} />
+        <Card>
+          <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+            <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+              Linear API rate limit exceeded
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              {rateLimitReset
+                ? `Resets in ~${Math.max(1, Math.ceil((new Date(rateLimitReset).getTime() - Date.now()) / 60000))} minute(s)`
+                : "Try again later"}
+            </p>
+            <button
+              onClick={refetch}
+              className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Retry
+            </button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div>
@@ -222,6 +249,16 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
   return (
     <div className="space-y-4">
       <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
+      {rateLimited && (
+        <RateLimitBanner
+          source="Linear"
+          fetchedAt={fetchedAt}
+          rateLimitReset={rateLimitReset}
+        />
+      )}
+      {revalidating && !rateLimited && (
+        <RevalidatingBanner source="Linear" />
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard
