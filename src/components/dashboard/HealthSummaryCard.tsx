@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ManualAIResponseModal } from "./ManualAIResponseModal";
+import { HealthTrendChart } from "./HealthTrendChart";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 function ScoreInfo() {
@@ -451,6 +452,11 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
           />
         </div>
       )}
+
+      {/* Score trend chart */}
+      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+        <HealthTrendChart refreshKey={refreshKey} />
+      </div>
     </Card>
   );
 }
