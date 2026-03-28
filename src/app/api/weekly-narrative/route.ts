@@ -5,7 +5,7 @@ import { fetchSlackMetrics } from "@/lib/slack";
 import { fetchDORAMetrics } from "@/lib/dora";
 import { generateWeeklyNarrative, isAIConfigured, getProvider, OllamaNotRunningError } from "@/lib/claude";
 import { getConfig } from "@/lib/config";
-import { getOrFetch, buildCacheKey, cache, CACHE_TTL } from "@/lib/cache";
+import { getOrFetch, buildCacheKey, cache, getTTL } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     const result = await getOrFetch(
       "weekly-narrative",
-      CACHE_TTL.weeklyNarrative,
+      getTTL("weeklyNarrative"),
       async () => {
         const owner = getConfig("GITHUB_ORG");
         const repo = getConfig("GITHUB_REPO");
@@ -59,16 +59,16 @@ export async function GET(request: NextRequest) {
         const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
         const [github, linear, slack, dora] = await Promise.all([
           githubConfigured
-            ? getOrFetch(buildCacheKey("github", { staleDays: 7, lookbackDays: 30 }), CACHE_TTL.github, () => fetchGitHubMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
+            ? getOrFetch(buildCacheKey("github", { staleDays: 7, lookbackDays: 30 }), getTTL("github"), () => fetchGitHubMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
             : null,
           teamId && getConfig("LINEAR_API_KEY")
-            ? getOrFetch(buildCacheKey("linear", { mode: "auto", days: 42 }), CACHE_TTL.linear, () => fetchLinearMetrics(teamId)).then((r) => r.value).catch(() => null)
+            ? getOrFetch(buildCacheKey("linear", { mode: "auto", days: 42 }), getTTL("linear"), () => fetchLinearMetrics(teamId)).then((r) => r.value).catch(() => null)
             : null,
           channelIds && getConfig("SLACK_BOT_TOKEN")
-            ? getOrFetch(buildCacheKey("slack", { channels: channelIdsStr }), CACHE_TTL.slack, () => fetchSlackMetrics(channelIds)).then((r) => r.value).catch(() => null)
+            ? getOrFetch(buildCacheKey("slack", { channels: channelIdsStr }), getTTL("slack"), () => fetchSlackMetrics(channelIds)).then((r) => r.value).catch(() => null)
             : null,
           githubConfigured
-            ? getOrFetch(buildCacheKey("dora", { lookbackDays: 30 }), CACHE_TTL.dora, () => fetchDORAMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
+            ? getOrFetch(buildCacheKey("dora", { lookbackDays: 30 }), getTTL("dora"), () => fetchDORAMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
             : null,
         ]);
 

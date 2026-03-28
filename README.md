@@ -49,7 +49,9 @@ On top of the deterministic score, an optional AI layer (Claude or a local Ollam
 - **Weekly AI narrative**: a prose team health summary generated from all connected data
 - **Dark mode** (default) and light mode ("Incorrect Mode") with smooth toggle
 - **Data freshness timestamps** on every section
-- **Rate limit detection** with countdown timers and graceful degradation
+- **Rate limit detection** for GitHub, Linear, and Slack — serves stale cached data with amber banners and countdown timers
+- **Historical health score trend chart** with colored health band zones and per-signal tooltip breakdowns (7d / 30d / 90d)
+- **Server-side stale-while-revalidate cache** with configurable per-integration TTLs via Settings UI
 - **Graceful degradation**: unconfigured integrations show setup placeholders with instructions
 - **In-app settings**: configure integrations from the dashboard UI (gear icon) — no `.env.local` editing required
 - **Flexible AI support**: Ollama (free, local), Anthropic Claude API, or Manual mode (export prompts to any AI chat — no API key needed)
@@ -65,8 +67,9 @@ On top of the deterministic score, an optional AI layer (Claude or a local Ollam
 | GitHub | Octokit (REST API) |
 | Linear | GraphQL API (raw fetch) |
 | Slack | @slack/web-api |
+| Persistence | better-sqlite3 (WAL mode, file-based) |
 
-No database required. All data is fetched on-demand from APIs.
+Health score snapshots are stored in SQLite (`data/health.db`) for trend charts. All integration data is still fetched on-demand from APIs.
 
 ## Architecture
 
@@ -82,6 +85,7 @@ Next.js API Routes (/api/*)
     +-- /api/dora -------------> GitHub Deployments / Releases / Merges
     +-- /api/health-summary --> Deterministic score + AI insights
     +-- /api/weekly-narrative > Full trend data + AI prose narrative
+    +-- /api/trends ----------> Health score trend data (SQLite)
     +-- /api/config ----------> In-app settings (read/write)
 ```
 
@@ -156,6 +160,7 @@ src/
 │       ├── dora/route.ts               # DORA metrics
 │       ├── health-summary/route.ts     # Deterministic score + AI insights
 │       ├── weekly-narrative/route.ts   # AI prose narrative
+│       ├── trends/route.ts             # Health score trend data
 │       └── config/route.ts             # Settings read/write
 ├── components/
 │   ├── ThemeProvider.tsx                # Dark/light mode context
@@ -164,7 +169,7 @@ src/
 │   ├── linear/                         # Velocity, workload, time-in-state (7 tabs), stalled
 │   ├── dora/                           # Deploy frequency, lead time, incidents, history
 │   ├── slack/                          # Response time, channel activity, overload
-│   └── ui/                             # Card, Badge, Skeleton, Spinner, ErrorState, RateLimitState
+│   └── ui/                             # Card, Badge, Skeleton, Spinner, ErrorState, RateLimitState, RateLimitBanner
 ├── hooks/
 │   └── useApiData.ts                   # Generic data fetching hook
 ├── lib/
@@ -174,6 +179,8 @@ src/
 │   ├── dora.ts                         # DORA metrics (deployments, incidents, correlation)
 │   ├── claude.ts                       # AI provider abstraction (Ollama, Anthropic, or Manual)
 │   ├── scoring.ts                      # Deterministic health score computation
+│   ├── db.ts                           # SQLite singleton (better-sqlite3, WAL mode)
+│   ├── errors.ts                       # Typed errors (RateLimitError)
 │   ├── config.ts                       # Dual config reader (env vars + .config.local.json)
 │   ├── utils.ts                        # Date helpers, rate limit error handling
 │   └── __tests__/                      # Vitest unit tests
@@ -182,7 +189,7 @@ src/
 
 ## Design Decisions
 
-- **No database**: keeps deployment simple. All metrics are computed on each request from the source APIs.
+- **Lightweight persistence**: SQLite (`better-sqlite3`, WAL mode) stores daily health score snapshots for trend charts. No migrations framework — schema is created on first access. All integration data is still fetched on-demand from source APIs.
 - **No Linear SDK**: uses raw GraphQL fetch to keep dependencies minimal and queries transparent.
 - **Client-side data fetching**: each dashboard section loads independently, so slower sources (Slack, Claude) don't block the page.
 - **Pluggable AI**: defaults to Ollama (free, local). Anthropic/Claude is available for higher quality with richer prompts. Manual mode lets you use any AI chat (ChatGPT, Claude, Gemini) with no API key — download a prompt file, upload it to any AI, then drag-and-drop the AI's response file back into the dashboard.
@@ -203,8 +210,8 @@ Set environment variables in your deployment platform's settings.
 
 Contributions welcome! See [ARCHITECTURE.md](ARCHITECTURE.md) for system internals. Some areas for improvement:
 
-- **Caching** — every page load re-fetches all APIs; stale-while-revalidate with a cache layer would reduce API pressure
-- **Historical trending** — a lightweight persistence layer (SQLite, JSON file) would unlock trend-over-time views
+- ~~**Caching** — stale-while-revalidate with configurable TTLs~~ *(done in Phase 02)*
+- ~~**Historical trending** — health score trend chart with SQLite persistence~~ *(done in Phase 02)*
 - **Team-level filtering** — support for multiple repos/teams/squads
 - **Notifications** — alert when the health score drops to Warning or Critical
 - **Slack team filtering** — track only specified team members, not all channel participants

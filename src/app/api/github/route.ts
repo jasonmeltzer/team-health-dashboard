@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { fetchGitHubMetrics } from "@/lib/github";
 import { getConfig } from "@/lib/config";
-import { asRateLimitError } from "@/lib/utils";
-import { getOrFetch, buildCacheKey, CACHE_TTL } from "@/lib/cache";
+import { RateLimitError } from "@/lib/errors";
+import { getOrFetch, buildCacheKey, getTTL, cache } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,24 +25,38 @@ export async function GET(request: NextRequest) {
     const cacheKey = buildCacheKey("github", { staleDays, lookbackDays });
     const result = await getOrFetch(
       cacheKey,
-      CACHE_TTL.github,
+      getTTL("github"),
       () => fetchGitHubMetrics(owner, repo, staleDays, lookbackDays),
-      { force }
+      { force, rethrow: (e) => e instanceof RateLimitError }
     );
 
     return Response.json({
       data: result.value,
       fetchedAt: result.cachedAt,
       cached: result.cached,
+      stale: result.stale ?? false,
     });
   } catch (error) {
-    const rateLimit = asRateLimitError(error);
-    if (rateLimit) {
-      return Response.json({
-        rateLimited: true,
-        rateLimitReset: rateLimit.resetAt.toISOString(),
-        error: rateLimit.message,
-      }, { status: 429 });
+    if (error instanceof RateLimitError) {
+      const cacheKey = buildCacheKey("github", {
+        staleDays: parseInt(new URLSearchParams(request.nextUrl.search).get("staleDays") ?? "7", 10) || 7,
+        lookbackDays: parseInt(new URLSearchParams(request.nextUrl.search).get("lookbackDays") ?? "30", 10) || 30,
+      });
+      const staleEntry = cache.get(cacheKey);
+      if (staleEntry) {
+        return Response.json({
+          data: staleEntry.value,
+          fetchedAt: new Date(staleEntry.cachedAt).toISOString(),
+          cached: true,
+          stale: true,
+          rateLimited: true,
+          rateLimitReset: error.resetAt?.toISOString() ?? null,
+        });
+      }
+      return Response.json(
+        { error: error.message, rateLimited: true, rateLimitReset: error.resetAt?.toISOString() ?? null },
+        { status: 429 }
+      );
     }
     const message =
       error instanceof Error ? error.message : "Failed to fetch GitHub metrics";

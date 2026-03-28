@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { fetchDORAMetrics } from "@/lib/dora";
 import { getConfig } from "@/lib/config";
-import { asRateLimitError } from "@/lib/utils";
-import { getOrFetch, buildCacheKey, CACHE_TTL } from "@/lib/cache";
+import { RateLimitError } from "@/lib/errors";
+import { getOrFetch, buildCacheKey, getTTL, cache } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,29 +35,43 @@ export async function GET(request: NextRequest) {
     const cacheKey = buildCacheKey("dora", { lookbackDays });
     const result = await getOrFetch(
       cacheKey,
-      CACHE_TTL.dora,
+      getTTL("dora"),
       () =>
         fetchDORAMetrics(owner, repo, lookbackDays, {
           source,
           environment,
           incidentLabels,
         }),
-      { force }
+      { force, rethrow: (e) => e instanceof RateLimitError }
     );
 
     return Response.json({
       data: result.value,
       fetchedAt: result.cachedAt,
       cached: result.cached,
+      stale: result.stale ?? false,
     });
   } catch (error) {
-    const rateLimit = asRateLimitError(error);
-    if (rateLimit) {
-      return Response.json({
-        rateLimited: true,
-        rateLimitReset: rateLimit.resetAt.toISOString(),
-        error: rateLimit.message,
-      }, { status: 429 });
+    if (error instanceof RateLimitError) {
+      const lookbackParam = request.nextUrl.searchParams.get("lookbackDays");
+      const lookbackParsed = parseInt(lookbackParam ?? "", 10);
+      const lookbackDays = !isNaN(lookbackParsed) && lookbackParsed > 0 ? lookbackParsed : 30;
+      const cacheKey = buildCacheKey("dora", { lookbackDays });
+      const staleEntry = cache.get(cacheKey);
+      if (staleEntry) {
+        return Response.json({
+          data: staleEntry.value,
+          fetchedAt: new Date(staleEntry.cachedAt).toISOString(),
+          cached: true,
+          stale: true,
+          rateLimited: true,
+          rateLimitReset: error.resetAt?.toISOString() ?? null,
+        });
+      }
+      return Response.json(
+        { error: error.message, rateLimited: true, rateLimitReset: error.resetAt?.toISOString() ?? null },
+        { status: 429 }
+      );
     }
     const message =
       error instanceof Error

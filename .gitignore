@@ -39,3 +39,6 @@ next-env.d.ts
 # claude
 .claude/
 .planning/
+
+# SQLite database
+/data/
