@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { fetchSlackMetrics } from "@/lib/slack";
 import { getConfig } from "@/lib/config";
 import { RateLimitError } from "@/lib/errors";
-import { getOrFetch, buildCacheKey, CACHE_TTL, cache } from "@/lib/cache";
+import { getOrFetch, buildCacheKey, getTTL, cache } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const cacheKey = buildCacheKey("slack", { channels: channelIdsStr });
     const result = await getOrFetch(
       cacheKey,
-      CACHE_TTL.slack,
+      getTTL("slack"),
       () => fetchSlackMetrics(channelIds),
       { force, rethrow: (e) => e instanceof RateLimitError }
     );

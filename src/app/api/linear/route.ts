@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { fetchLinearMetrics } from "@/lib/linear";
 import { getConfig } from "@/lib/config";
 import { RateLimitError } from "@/lib/errors";
-import { getOrFetch, buildCacheKey, CACHE_TTL, cache } from "@/lib/cache";
+import { getOrFetch, buildCacheKey, getTTL, cache } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     });
     const result = await getOrFetch(
       cacheKey,
-      CACHE_TTL.linear,
+      getTTL("linear"),
       () => fetchLinearMetrics(teamId, mode || undefined, lookbackDays),
       { force, rethrow: (e) => e instanceof RateLimitError }
     );

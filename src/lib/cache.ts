@@ -99,7 +99,7 @@ export const CACHE_TTL = {
  * Config keys: CACHE_TTL_GITHUB, CACHE_TTL_LINEAR, CACHE_TTL_HEALTH_SUMMARY, etc.
  */
 export function getTTL(source: keyof typeof CACHE_TTL): number {
-  const envKey = `CACHE_TTL_${source.toUpperCase().replace(/([a-z])([A-Z])/g, "$1_$2").toUpperCase()}`;
+  const envKey = `CACHE_TTL_${source.replace(/([a-z])([A-Z])/g, "$1_$2").toUpperCase()}`;
   const configured = getConfig(envKey);
   if (configured) {
     const parsed = parseInt(configured, 10);

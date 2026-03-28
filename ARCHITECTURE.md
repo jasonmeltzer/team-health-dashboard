@@ -346,10 +346,10 @@ Default TTLs can be overridden via `CACHE_TTL_*` env vars or Settings UI:
 
 | Source | Default TTL | Config Key |
 |--------|-------------|------------|
-| GitHub | 5 min | `CACHE_TTL_GITHUB` |
-| Linear | 5 min | `CACHE_TTL_LINEAR` |
-| Slack | 5 min | `CACHE_TTL_SLACK` |
-| DORA | 5 min | `CACHE_TTL_DORA` |
+| GitHub | 15 min | `CACHE_TTL_GITHUB` |
+| Linear | 15 min | `CACHE_TTL_LINEAR` |
+| Slack | 15 min | `CACHE_TTL_SLACK` |
+| DORA | 15 min | `CACHE_TTL_DORA` |
 | Health Summary | 10 min | `CACHE_TTL_HEALTH_SUMMARY` |
 | Weekly Narrative | 15 min | `CACHE_TTL_WEEKLY_NARRATIVE` |
 
@@ -482,16 +482,13 @@ All three integration APIs have rate limit detection:
 ### Schema
 
 ```sql
-CREATE TABLE IF NOT EXISTS snapshots (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  date TEXT NOT NULL,            -- ISO date (YYYY-MM-DD)
-  score INTEGER NOT NULL,        -- Health score 0-100
-  band TEXT NOT NULL,            -- 'healthy' | 'warning' | 'critical'
-  github_deductions TEXT,        -- JSON array of deductions
-  linear_deductions TEXT,        -- JSON array of deductions
-  slack_deductions TEXT,         -- JSON array of deductions
-  dora_deductions TEXT,          -- JSON array of deductions
-  created_at TEXT DEFAULT (datetime('now'))
+CREATE TABLE IF NOT EXISTS health_snapshots (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  date       TEXT    NOT NULL UNIQUE,  -- ISO date (YYYY-MM-DD), one row per day
+  created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+  score      INTEGER NOT NULL,         -- Health score 0-100
+  band       TEXT    NOT NULL,         -- 'healthy' | 'warning' | 'critical'
+  deductions TEXT    NOT NULL          -- JSON array of all ScoreDeduction objects
 );
 ```
 

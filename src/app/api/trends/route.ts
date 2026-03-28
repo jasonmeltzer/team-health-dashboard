@@ -17,13 +17,22 @@ export async function GET(request: NextRequest) {
     }
 
     const rows = getSnapshots(days);
-    const snapshots: TrendSnapshot[] = rows.map((row) => ({
-      id: row.id,
-      createdAt: row.created_at,
-      score: row.score,
-      band: row.band as TrendSnapshot["band"],
-      deductions: JSON.parse(row.deductions),
-    }));
+    const snapshots: TrendSnapshot[] = rows.map((row) => {
+      let deductions;
+      try {
+        deductions = JSON.parse(row.deductions);
+      } catch {
+        deductions = [];
+      }
+      return {
+        id: row.id,
+        date: row.date,
+        createdAt: row.created_at,
+        score: row.score,
+        band: row.band as TrendSnapshot["band"],
+        deductions,
+      };
+    });
 
     const now = new Date();
     const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);

@@ -10,6 +10,7 @@ function initSchema(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS health_snapshots (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      date       TEXT    NOT NULL UNIQUE,
       created_at TEXT    NOT NULL DEFAULT (datetime('now')),
       score      INTEGER NOT NULL,
       band       TEXT    NOT NULL,
@@ -17,8 +18,16 @@ function initSchema(db: Database.Database) {
     )
   `);
   db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_snapshots_created_at ON health_snapshots(created_at)
+    CREATE INDEX IF NOT EXISTS idx_snapshots_date ON health_snapshots(date)
   `);
+  // Migration: add date column if upgrading from schema without it
+  try {
+    db.exec(`ALTER TABLE health_snapshots ADD COLUMN date TEXT`);
+    db.exec(`UPDATE health_snapshots SET date = substr(created_at, 1, 10) WHERE date IS NULL`);
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_snapshots_date_unique ON health_snapshots(date)`);
+  } catch {
+    // Column already exists — expected on fresh installs
+  }
 }
 
 export function getDb(): Database.Database {
@@ -40,11 +49,14 @@ export function writeSnapshot(snap: {
   deductions: ScoreDeduction[];
 }): void {
   const db = getDb();
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10); // YYYY-MM-DD
   const stmt = db.prepare(
-    "INSERT INTO health_snapshots (created_at, score, band, deductions) VALUES (?, ?, ?, ?)"
+    "INSERT OR REPLACE INTO health_snapshots (date, created_at, score, band, deductions) VALUES (?, ?, ?, ?, ?)"
   );
   stmt.run(
-    new Date().toISOString(),
+    date,
+    now.toISOString(),
     snap.score,
     snap.band,
     JSON.stringify(snap.deductions)
@@ -53,6 +65,7 @@ export function writeSnapshot(snap: {
 
 export function getSnapshots(days: number): Array<{
   id: number;
+  date: string;
   created_at: string;
   score: number;
   band: string;
@@ -60,10 +73,11 @@ export function getSnapshots(days: number): Array<{
 }> {
   const db = getDb();
   const stmt = db.prepare(
-    "SELECT id, created_at, score, band, deductions FROM health_snapshots WHERE created_at >= datetime('now', ? || ' days') ORDER BY created_at ASC"
+    "SELECT id, date, created_at, score, band, deductions FROM health_snapshots WHERE date >= date('now', ? || ' days') ORDER BY date ASC"
   );
   return stmt.all(`-${days}`) as Array<{
     id: number;
+    date: string;
     created_at: string;
     score: number;
     band: string;

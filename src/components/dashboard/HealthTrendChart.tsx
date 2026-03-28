@@ -26,7 +26,7 @@ function ScoreTooltip({ active, payload }: { active?: boolean; payload?: Array<{
         Score: {snap.score}
       </p>
       <p className="mb-1 text-zinc-400">
-        {new Date(snap.createdAt).toLocaleString()}
+        {snap.date}
       </p>
       {snap.deductions
         .filter((d) => d.points > 0)
@@ -111,10 +111,13 @@ export function HealthTrendChart({ refreshKey }: { refreshKey: number }) {
             <ReferenceArea y1={0}  y2={59}  fill="#fee2e2" fillOpacity={0.3} ifOverflow="visible" />
             <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
             <XAxis
-              dataKey="createdAt"
+              dataKey="date"
               tick={{ fontSize: 12 }}
               stroke="#a1a1aa"
-              tickFormatter={(value) => new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+              tickFormatter={(value) => {
+                const d = new Date(value + "T00:00:00");
+                return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+              }}
             />
             <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} stroke="#a1a1aa" />
             <Tooltip content={<ScoreTooltip />} />

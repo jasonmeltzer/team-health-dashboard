@@ -6,7 +6,7 @@ import { fetchDORAMetrics } from "@/lib/dora";
 import { generateHealthSummary, isAIConfigured, getProvider, OllamaNotRunningError } from "@/lib/claude";
 import { computeHealthScore, type ScoreDeduction } from "@/lib/scoring";
 import { getConfig } from "@/lib/config";
-import { getOrFetch, buildCacheKey, cache, CACHE_TTL } from "@/lib/cache";
+import { getOrFetch, buildCacheKey, cache, getTTL } from "@/lib/cache";
 import { writeSnapshot } from "@/lib/db";
 
 interface HealthSummaryData {
@@ -31,16 +31,16 @@ async function fetchSourceData() {
   const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
   const [github, linear, slack, dora] = await Promise.all([
     githubConfigured
-      ? getOrFetch(buildCacheKey("github", { staleDays: 7, lookbackDays: 30 }), CACHE_TTL.github, () => fetchGitHubMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
+      ? getOrFetch(buildCacheKey("github", { staleDays: 7, lookbackDays: 30 }), getTTL("github"), () => fetchGitHubMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
       : null,
     teamId && getConfig("LINEAR_API_KEY")
-      ? getOrFetch(buildCacheKey("linear", { mode: "auto", days: 42 }), CACHE_TTL.linear, () => fetchLinearMetrics(teamId)).then((r) => r.value).catch(() => null)
+      ? getOrFetch(buildCacheKey("linear", { mode: "auto", days: 42 }), getTTL("linear"), () => fetchLinearMetrics(teamId)).then((r) => r.value).catch(() => null)
       : null,
     channelIds && getConfig("SLACK_BOT_TOKEN")
-      ? getOrFetch(buildCacheKey("slack", { channels: channelIdsStr }), CACHE_TTL.slack, () => fetchSlackMetrics(channelIds)).then((r) => r.value).catch(() => null)
+      ? getOrFetch(buildCacheKey("slack", { channels: channelIdsStr }), getTTL("slack"), () => fetchSlackMetrics(channelIds)).then((r) => r.value).catch(() => null)
       : null,
     githubConfigured
-      ? getOrFetch(buildCacheKey("dora", { lookbackDays: 30 }), CACHE_TTL.dora, () => fetchDORAMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
+      ? getOrFetch(buildCacheKey("dora", { lookbackDays: 30 }), getTTL("dora"), () => fetchDORAMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
       : null,
   ]);
 
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
     // Ollama / Anthropic — use getOrFetch for caching
     const result = await getOrFetch<HealthSummaryData>(
       "health-summary",
-      CACHE_TTL.healthSummary,
+      getTTL("healthSummary"),
       async () => {
         const { github, linear, slack, dora } = await fetchSourceData();
         const scoreResult = computeHealthScore(github, linear, slack, dora);
@@ -171,6 +171,7 @@ export async function GET(request: NextRequest) {
       data: result.value,
       fetchedAt: result.cachedAt,
       cached: result.cached,
+      stale: result.stale ?? false,
     });
   } catch (error) {
     if (error instanceof OllamaNotRunningError) {
