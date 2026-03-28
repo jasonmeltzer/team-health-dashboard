@@ -7,6 +7,7 @@ import { generateHealthSummary, isAIConfigured, getProvider, OllamaNotRunningErr
 import { computeHealthScore, type ScoreDeduction } from "@/lib/scoring";
 import { getConfig } from "@/lib/config";
 import { getOrFetch, buildCacheKey, cache, CACHE_TTL } from "@/lib/cache";
+import { writeSnapshot } from "@/lib/db";
 
 interface HealthSummaryData {
   overallHealth: string;
@@ -61,6 +62,17 @@ export async function GET(request: NextRequest) {
       // Always re-compute the deterministic score (even on force refresh)
       const { github, linear, slack, dora } = await fetchSourceData();
       const scoreResult = computeHealthScore(github, linear, slack, dora);
+
+      // Persist snapshot on every fresh compute (PERS-01, D-10)
+      try {
+        writeSnapshot({
+          score: scoreResult.score,
+          band: scoreResult.overallHealth,
+          deductions: scoreResult.deductions,
+        });
+      } catch (e) {
+        console.error("Failed to write snapshot:", e);
+      }
 
       // Force refresh in manual mode: clear the cached import so the user can re-import.
       // Source data cache is unaffected — the deterministic score is always fresh.
@@ -124,6 +136,17 @@ export async function GET(request: NextRequest) {
       async () => {
         const { github, linear, slack, dora } = await fetchSourceData();
         const scoreResult = computeHealthScore(github, linear, slack, dora);
+
+        // Persist snapshot on every fresh compute (PERS-01, D-10)
+        try {
+          writeSnapshot({
+            score: scoreResult.score,
+            band: scoreResult.overallHealth,
+            deductions: scoreResult.deductions,
+          });
+        } catch (e) {
+          console.error("Failed to write snapshot:", e);
+        }
 
         if (isAIConfigured()) {
           const summary = await generateHealthSummary(github, linear, slack, scoreResult, dora);
