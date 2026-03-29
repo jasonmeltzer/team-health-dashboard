@@ -8,6 +8,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { RateLimitState } from "@/components/ui/RateLimitState";
+import { RateLimitBanner, RevalidatingBanner } from "@/components/ui/RateLimitBanner";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { DORARatingBadge } from "./DORARatingBadge";
 import { DeploymentFrequencyChart, type DeployFilter } from "./DeploymentFrequencyChart";
@@ -34,7 +35,7 @@ const LOOKBACK_OPTIONS = [
 export function DORASection({ refreshKey }: { refreshKey: number }) {
   const [lookbackDays, setLookbackDays] = useState(30);
   const [deployFilter, setDeployFilter] = useState<DeployFilter>(null);
-  const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, rateLimited, rateLimitReset, refetch } =
+  const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, revalidating, rateLimited, rateLimitReset, refetch } =
     useApiData<DORAMetrics>(
       `/api/dora?lookbackDays=${lookbackDays}`,
       refreshKey
@@ -89,7 +90,7 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
     );
   }
 
-  if (rateLimited) {
+  if (rateLimited && !data) {
     return (
       <div>
         <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} />
@@ -136,6 +137,16 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
   return (
     <div className="space-y-4">
       <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
+      {rateLimited && (
+        <RateLimitBanner
+          source="DORA"
+          fetchedAt={fetchedAt}
+          rateLimitReset={rateLimitReset}
+        />
+      )}
+      {revalidating && !rateLimited && (
+        <RevalidatingBanner source="DORA" />
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard

@@ -1,6 +1,7 @@
 import type { LinearMetrics, VelocityDataPoint, StalledIssue, WorkloadEntry, TimeInStateStats, TimeInStateData, TimeInStateIssue, LeadTimeTrendPoint, CycleSummary } from "@/types/linear";
 import { daysBetween } from "@/lib/utils";
 import { getConfig } from "@/lib/config";
+import { RateLimitError } from "@/lib/errors";
 
 const LINEAR_API = "https://api.linear.app/graphql";
 
@@ -14,6 +15,13 @@ async function linearQuery<T>(query: string, variables?: Record<string, unknown>
     body: JSON.stringify({ query, variables }),
   });
 
+  if (res.status === 429) {
+    const retryAfter = res.headers.get("Retry-After");
+    throw new RateLimitError(
+      "linear",
+      retryAfter ? parseInt(retryAfter, 10) * 1000 : undefined
+    );
+  }
   const json = await res.json();
   if (json.errors) {
     throw new Error(

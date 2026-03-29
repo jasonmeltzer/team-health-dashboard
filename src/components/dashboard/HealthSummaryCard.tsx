@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ManualAIResponseModal } from "./ManualAIResponseModal";
+import { HealthTrendChart } from "./HealthTrendChart";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 function ScoreInfo() {
@@ -251,7 +252,7 @@ function ManualModeControls({ onImported }: { onImported: () => void }) {
 
 export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const { data, loading, error, notConfigured, setupHint, cached, refetch } = useApiData<HealthSummary>(
+  const { data, loading, error, notConfigured, setupHint, cached, stale, rateLimited, fetchedAt, refetch } = useApiData<HealthSummary>(
     "/api/health-summary",
     refreshKey
   );
@@ -368,8 +369,16 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
             {data.generatedAt && (
               <span className="text-xs text-zinc-400 dark:text-zinc-500">
                 Updated {formatRelativeTime(data.generatedAt)}
-                {cached && (
+                {cached && !stale && (
                   <span className="ml-1 text-amber-500 dark:text-amber-400">(cached)</span>
+                )}
+                {stale && !rateLimited && (
+                  <span className="ml-1 text-blue-500 dark:text-blue-400">(refreshing...)</span>
+                )}
+                {stale && rateLimited && fetchedAt && (
+                  <span className="ml-1 text-amber-500 dark:text-amber-400">
+                    as of {formatRelativeTime(fetchedAt)}
+                  </span>
                 )}
               </span>
             )}
@@ -451,6 +460,11 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
           />
         </div>
       )}
+
+      {/* Score trend chart */}
+      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+        <HealthTrendChart refreshKey={refreshKey} />
+      </div>
     </Card>
   );
 }

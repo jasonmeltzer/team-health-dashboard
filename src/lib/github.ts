@@ -1,9 +1,38 @@
 import { Octokit } from "octokit";
+import { RequestError } from "@octokit/request-error";
 import type { PRMetrics, CycleTimeDataPoint, ReviewBottleneck, BottleneckPR, StalePR, OpenPR } from "@/types/github";
 import { getISOWeek, daysBetween, hoursBetween, daysAgo } from "@/lib/utils";
 import { getConfig } from "@/lib/config";
+import { RateLimitError } from "@/lib/errors";
 
 export async function fetchGitHubMetrics(
+  owner: string,
+  repo: string,
+  staleDays: number = 7,
+  lookbackDays: number = 30
+): Promise<PRMetrics> {
+  try {
+  return await _fetchGitHubMetrics(owner, repo, staleDays, lookbackDays);
+  } catch (error) {
+    if (error instanceof RequestError) {
+      if (
+        error.status === 429 ||
+        (error.status === 403 && error.response?.headers?.["x-ratelimit-remaining"] === "0")
+      ) {
+        const retryAfter = error.response?.headers?.["retry-after"];
+        const resetAt = error.response?.headers?.["x-ratelimit-reset"];
+        throw new RateLimitError(
+          "github",
+          retryAfter ? parseInt(String(retryAfter), 10) * 1000 : undefined,
+          resetAt ? new Date(parseInt(String(resetAt), 10) * 1000) : undefined
+        );
+      }
+    }
+    throw error;
+  }
+}
+
+async function _fetchGitHubMetrics(
   owner: string,
   repo: string,
   staleDays: number = 7,

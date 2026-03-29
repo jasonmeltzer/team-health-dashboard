@@ -7,8 +7,34 @@ import type {
 } from "@/types/slack";
 import { formatDate, minutesBetween, daysAgo } from "@/lib/utils";
 import { getConfig } from "@/lib/config";
+import { RateLimitError } from "@/lib/errors";
 
 export async function fetchSlackMetrics(
+  channelIds: string[]
+): Promise<SlackMetrics> {
+  try {
+    return await _fetchSlackMetrics(channelIds);
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error as { code: string }).code === "slack_webapi_rate_limited"
+    ) {
+      const retryAfter =
+        "retryAfter" in error
+          ? (error as { retryAfter: number }).retryAfter
+          : undefined;
+      throw new RateLimitError(
+        "slack",
+        retryAfter ? retryAfter * 1000 : undefined
+      );
+    }
+    throw error;
+  }
+}
+
+async function _fetchSlackMetrics(
   channelIds: string[]
 ): Promise<SlackMetrics> {
   const client = new WebClient(getConfig("SLACK_BOT_TOKEN"));

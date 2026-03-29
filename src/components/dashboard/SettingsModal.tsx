@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import FocusTrap from "focus-trap-react";
 import { cn } from "@/lib/utils";
 
 interface ConfigStatus {
@@ -18,7 +17,7 @@ interface SettingsModalProps {
   onSaved: () => void;
 }
 
-type Section = "github" | "linear" | "slack" | "dora" | "ai";
+type Section = "github" | "linear" | "slack" | "dora" | "ai" | "cache";
 
 const SECTIONS: { key: Section; label: string; description: string }[] = [
   { key: "github", label: "GitHub", description: "PR metrics, cycle time, review bottlenecks" },
@@ -26,6 +25,7 @@ const SECTIONS: { key: Section; label: string; description: string }[] = [
   { key: "linear", label: "Linear", description: "Sprint velocity, workload, time-in-state" },
   { key: "slack", label: "Slack", description: "Response times, channel activity, overload" },
   { key: "ai", label: "AI Analysis", description: "Health summary and weekly narrative" },
+  { key: "cache", label: "Cache", description: "Per-integration refresh intervals" },
 ];
 
 export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
@@ -40,6 +40,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
   const [slack, setSlack] = useState({ botToken: "", channelIds: "" });
   const [doraSettings, setDoraSettings] = useState({ source: "auto", environment: "production", incidentLabels: "incident,hotfix,production-bug" });
   const [ai, setAi] = useState({ provider: "ollama", anthropicKey: "", ollamaUrl: "", ollamaModel: "" });
+  const [cacheTtl, setCacheTtl] = useState({ github: "", linear: "", slack: "", dora: "", healthSummary: "", weeklyNarrative: "" });
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -51,18 +52,35 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
         if (json.data.aiProvider) {
           setAi((s) => ({ ...s, provider: json.data.aiProvider }));
         }
+        // Sync cache TTL fields with saved values
+        if (json.data.cacheTtl) {
+          setCacheTtl(json.data.cacheTtl);
+        }
       }
     } catch {
       // ignore
     }
   }, []);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (open) {
       fetchStatus();
       setMessage(null);
+      // Focus the dialog on open so Escape works immediately
+      requestAnimationFrame(() => dialogRef.current?.focus());
     }
   }, [open, fetchStatus]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -123,14 +141,25 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
       OLLAMA_MODEL: ai.ollamaModel,
     });
 
+  const saveCache = () =>
+    handleSave({
+      CACHE_TTL_GITHUB: cacheTtl.github,
+      CACHE_TTL_LINEAR: cacheTtl.linear,
+      CACHE_TTL_SLACK: cacheTtl.slack,
+      CACHE_TTL_DORA: cacheTtl.dora,
+      CACHE_TTL_HEALTH_SUMMARY: cacheTtl.healthSummary,
+      CACHE_TTL_WEEKLY_NARRATIVE: cacheTtl.weeklyNarrative,
+    });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <FocusTrap active={open} focusTrapOptions={{ initialFocus: false, escapeDeactivates: true, onDeactivate: onClose }}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-modal-title"
-        className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+        tabIndex={-1}
+        className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-zinc-200 bg-white shadow-xl outline-none dark:border-zinc-700 dark:bg-zinc-900"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-700">
@@ -167,7 +196,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                 <span
                   className={cn(
                     "inline-block h-2 w-2 rounded-full",
-                    status?.[section.key]
+                    status && section.key in status && status[section.key as keyof ConfigStatus]
                       ? "bg-emerald-500"
                       : "bg-zinc-300 dark:bg-zinc-600"
                   )}
@@ -320,6 +349,59 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
               />
             )}
 
+            {activeSection === "cache" && (
+              <SectionForm
+                title="Cache"
+                description="Configure how long API responses are cached before revalidating. Env vars (e.g. CACHE_TTL_GITHUB in .env.local) take precedence over these settings."
+                fields={[
+                  {
+                    label: "GitHub cache TTL (ms)",
+                    placeholder: "900000",
+                    value: cacheTtl.github,
+                    onChange: (v) => setCacheTtl((s) => ({ ...s, github: v })),
+                    help: "How long to cache GitHub API responses before refreshing. Default: 15 minutes (900000ms).\n\nYou can also set CACHE_TTL_GITHUB in .env.local — env vars take precedence over this setting.",
+                  },
+                  {
+                    label: "Linear cache TTL (ms)",
+                    placeholder: "900000",
+                    value: cacheTtl.linear,
+                    onChange: (v) => setCacheTtl((s) => ({ ...s, linear: v })),
+                    help: "How long to cache Linear API responses before refreshing. Default: 15 minutes (900000ms).\n\nYou can also set CACHE_TTL_LINEAR in .env.local — env vars take precedence over this setting.",
+                  },
+                  {
+                    label: "Slack cache TTL (ms)",
+                    placeholder: "900000",
+                    value: cacheTtl.slack,
+                    onChange: (v) => setCacheTtl((s) => ({ ...s, slack: v })),
+                    help: "How long to cache Slack API responses before refreshing. Default: 15 minutes (900000ms).\n\nYou can also set CACHE_TTL_SLACK in .env.local — env vars take precedence over this setting.",
+                  },
+                  {
+                    label: "DORA cache TTL (ms)",
+                    placeholder: "900000",
+                    value: cacheTtl.dora,
+                    onChange: (v) => setCacheTtl((s) => ({ ...s, dora: v })),
+                    help: "How long to cache DORA metrics before refreshing. Default: 15 minutes (900000ms).\n\nYou can also set CACHE_TTL_DORA in .env.local — env vars take precedence over this setting.",
+                  },
+                  {
+                    label: "Health Summary TTL (ms)",
+                    placeholder: "600000",
+                    value: cacheTtl.healthSummary,
+                    onChange: (v) => setCacheTtl((s) => ({ ...s, healthSummary: v })),
+                    help: "How long to cache the health summary (includes AI call). Default: 10 minutes (600000ms).\n\nYou can also set CACHE_TTL_HEALTH_SUMMARY in .env.local — env vars take precedence over this setting.",
+                  },
+                  {
+                    label: "Weekly Narrative TTL (ms)",
+                    placeholder: "900000",
+                    value: cacheTtl.weeklyNarrative,
+                    onChange: (v) => setCacheTtl((s) => ({ ...s, weeklyNarrative: v })),
+                    help: "How long to cache the weekly narrative (expensive AI call). Default: 15 minutes (900000ms).\n\nYou can also set CACHE_TTL_WEEKLY_NARRATIVE in .env.local — env vars take precedence over this setting.",
+                  },
+                ]}
+                onSave={saveCache}
+                saving={saving}
+              />
+            )}
+
             {activeSection === "ai" && (
               <div className="space-y-4">
                 <div>
@@ -414,7 +496,6 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
           </div>
         </div>
       </div>
-      </FocusTrap>
     </div>
   );
 }

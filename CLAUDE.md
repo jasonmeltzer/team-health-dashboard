@@ -12,7 +12,7 @@ AI-powered engineering team health dashboard that pulls data from GitHub, Linear
 - **Octokit** for GitHub REST API
 - **Raw GraphQL fetch** for Linear API (no SDK)
 - **`@slack/web-api`** for Slack API
-- **No database** — all data fetched on-demand
+- **SQLite** (`better-sqlite3`) for health score snapshot persistence; integration data fetched on-demand
 
 ## Architecture
 

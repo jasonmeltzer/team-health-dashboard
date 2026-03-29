@@ -5,7 +5,7 @@ import { fetchSlackMetrics } from "@/lib/slack";
 import { fetchDORAMetrics } from "@/lib/dora";
 import { computeHealthScore } from "@/lib/scoring";
 import { getConfig } from "@/lib/config";
-import { getOrFetch, buildCacheKey, cache, CACHE_TTL } from "@/lib/cache";
+import { getOrFetch, buildCacheKey, cache, getTTL } from "@/lib/cache";
 import { extractJSON } from "@/lib/claude";
 
 export async function POST(request: NextRequest) {
@@ -76,16 +76,16 @@ async function handleHealthSummaryResponse(response: string) {
   const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
   const [github, linear, slack, dora] = await Promise.all([
     githubConfigured
-      ? getOrFetch(buildCacheKey("github", { staleDays: 7, lookbackDays: 30 }), CACHE_TTL.github, () => fetchGitHubMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
+      ? getOrFetch(buildCacheKey("github", { staleDays: 7, lookbackDays: 30 }), getTTL("github"), () => fetchGitHubMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
       : null,
     teamId && getConfig("LINEAR_API_KEY")
-      ? getOrFetch(buildCacheKey("linear", { mode: "cycles", days: 42 }), CACHE_TTL.linear, () => fetchLinearMetrics(teamId)).then((r) => r.value).catch(() => null)
+      ? getOrFetch(buildCacheKey("linear", { mode: "cycles", days: 42 }), getTTL("linear"), () => fetchLinearMetrics(teamId)).then((r) => r.value).catch(() => null)
       : null,
     channelIds && getConfig("SLACK_BOT_TOKEN")
-      ? getOrFetch(buildCacheKey("slack", { channels: channelIdsStr }), CACHE_TTL.slack, () => fetchSlackMetrics(channelIds)).then((r) => r.value).catch(() => null)
+      ? getOrFetch(buildCacheKey("slack", { channels: channelIdsStr }), getTTL("slack"), () => fetchSlackMetrics(channelIds)).then((r) => r.value).catch(() => null)
       : null,
     githubConfigured
-      ? getOrFetch(buildCacheKey("dora", { lookbackDays: 30 }), CACHE_TTL.dora, () => fetchDORAMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
+      ? getOrFetch(buildCacheKey("dora", { lookbackDays: 30 }), getTTL("dora"), () => fetchDORAMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
       : null,
   ]);
 
@@ -104,7 +104,7 @@ async function handleHealthSummaryResponse(response: string) {
   cache.set("manual:health-summary", {
     value: result,
     cachedAt: Date.now(),
-    ttlMs: CACHE_TTL.healthSummary,
+    ttlMs: getTTL("healthSummary"),
   });
 
   return Response.json({
@@ -138,7 +138,7 @@ function handleWeeklyNarrativeResponse(response: string) {
   cache.set("manual:weekly-narrative", {
     value: result,
     cachedAt: Date.now(),
-    ttlMs: CACHE_TTL.weeklyNarrative,
+    ttlMs: getTTL("weeklyNarrative"),
   });
 
   return Response.json({

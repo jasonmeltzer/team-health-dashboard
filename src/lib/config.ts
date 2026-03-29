@@ -48,7 +48,7 @@ export function saveConfig(values: ConfigStore) {
 /**
  * Returns which integrations are configured (without exposing secrets).
  */
-export function getConfigStatus(): Record<string, boolean | string> {
+export function getConfigStatus(): Record<string, boolean | string | Record<string, string>> {
   const githubConfigured = !!(getConfig("GITHUB_TOKEN") && getConfig("GITHUB_ORG") && getConfig("GITHUB_REPO"));
   const aiProvider = getConfig("AI_PROVIDER") || (getConfig("ANTHROPIC_API_KEY") ? "anthropic" : "ollama");
   return {
@@ -58,5 +58,13 @@ export function getConfigStatus(): Record<string, boolean | string> {
     ai: aiProvider === "manual" || !!(getConfig("ANTHROPIC_API_KEY") || aiProvider === "ollama"),
     aiProvider,
     dora: githubConfigured,
+    cacheTtl: {
+      github: getConfig("CACHE_TTL_GITHUB") || "",
+      linear: getConfig("CACHE_TTL_LINEAR") || "",
+      slack: getConfig("CACHE_TTL_SLACK") || "",
+      dora: getConfig("CACHE_TTL_DORA") || "",
+      healthSummary: getConfig("CACHE_TTL_HEALTH_SUMMARY") || "",
+      weeklyNarrative: getConfig("CACHE_TTL_WEEKLY_NARRATIVE") || "",
+    },
   };
 }

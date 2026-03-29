@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import FocusTrap from "focus-trap-react";
 import { cn } from "@/lib/utils";
 
 interface ManualAIResponseModalProps {
@@ -49,12 +48,29 @@ export function ManualAIResponseModal({
     };
   }, [showPaste]);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   // Cleanup close timer on unmount
   useEffect(() => {
     return () => {
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      requestAnimationFrame(() => dialogRef.current?.focus());
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -127,12 +143,13 @@ export function ManualAIResponseModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <FocusTrap active={open} focusTrapOptions={{ initialFocus: false, escapeDeactivates: true, onDeactivate: onClose }}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="manual-ai-modal-title"
-        className="flex w-full max-w-lg flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+        tabIndex={-1}
+        className="flex w-full max-w-lg flex-col rounded-xl border border-zinc-200 bg-white shadow-xl outline-none dark:border-zinc-700 dark:bg-zinc-900"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-700">
@@ -272,7 +289,6 @@ export function ManualAIResponseModal({
           </button>
         </div>
       </div>
-      </FocusTrap>
     </div>
   );
 }

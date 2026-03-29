@@ -8,6 +8,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { RateLimitState } from "@/components/ui/RateLimitState";
+import { RateLimitBanner, RevalidatingBanner } from "@/components/ui/RateLimitBanner";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { cn } from "@/lib/utils";
 import { CycleTimeChart } from "./CycleTimeChart";
@@ -39,7 +40,7 @@ const LOOKBACK_OPTIONS = [
 export function GitHubSection({ refreshKey }: { refreshKey: number }) {
   const [staleDays, setStaleDays] = useState(7);
   const [lookbackDays, setLookbackDays] = useState(30);
-  const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, rateLimited, rateLimitReset, refetch } = useApiData<PRMetrics>(
+  const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, stale, revalidating, rateLimited, rateLimitReset, refetch } = useApiData<PRMetrics>(
     `/api/github?staleDays=${staleDays}&lookbackDays=${lookbackDays}`,
     refreshKey
   );
@@ -115,7 +116,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
     );
   }
 
-  if (rateLimited) {
+  if (rateLimited && !data) {
     return (
       <div>
         <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} />
@@ -142,6 +143,16 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
   return (
     <div className="space-y-4">
       <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
+      {rateLimited && (
+        <RateLimitBanner
+          source="GitHub"
+          fetchedAt={fetchedAt}
+          rateLimitReset={rateLimitReset}
+        />
+      )}
+      {revalidating && !rateLimited && (
+        <RevalidatingBanner source="GitHub" />
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard

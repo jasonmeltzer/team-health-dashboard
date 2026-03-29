@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { RateLimitBanner, RevalidatingBanner } from "@/components/ui/RateLimitBanner";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { ResponseTimeChart } from "./ResponseTimeChart";
 import { ChannelActivityChart } from "./ChannelActivityChart";
@@ -18,7 +19,7 @@ const SlackIcon = () => (
 );
 
 export function SlackSection({ refreshKey }: { refreshKey: number }) {
-  const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, refetch } = useApiData<SlackMetrics>(
+  const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, revalidating, rateLimited, rateLimitReset, refetch } = useApiData<SlackMetrics>(
     "/api/slack",
     refreshKey
   );
@@ -51,6 +52,32 @@ export function SlackSection({ refreshKey }: { refreshKey: number }) {
     );
   }
 
+  if (rateLimited && !data) {
+    return (
+      <div>
+        <SectionHeader title="Slack" icon={<SlackIcon />} />
+        <Card>
+          <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+            <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+              Slack API rate limit exceeded
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              {rateLimitReset
+                ? `Resets in ~${Math.max(1, Math.ceil((new Date(rateLimitReset).getTime() - Date.now()) / 60000))} minute(s)`
+                : "Try again later"}
+            </p>
+            <button
+              onClick={refetch}
+              className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Retry
+            </button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div>
@@ -67,6 +94,16 @@ export function SlackSection({ refreshKey }: { refreshKey: number }) {
   return (
     <div className="space-y-4">
       <SectionHeader title="Slack" icon={<SlackIcon />} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
+      {rateLimited && (
+        <RateLimitBanner
+          source="Slack"
+          fetchedAt={fetchedAt}
+          rateLimitReset={rateLimitReset}
+        />
+      )}
+      {revalidating && !rateLimited && (
+        <RevalidatingBanner source="Slack" />
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard

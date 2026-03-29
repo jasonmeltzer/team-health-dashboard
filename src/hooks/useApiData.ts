@@ -22,6 +22,7 @@ export function useApiData<T>(url: string, refreshKey: number) {
   const [cached, setCached] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
   const [rateLimitReset, setRateLimitReset] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
   // Track previous refreshKey to detect manual refresh (force bypass cache)
   const prevRefreshKey = useRef(refreshKey);
@@ -30,6 +31,8 @@ export function useApiData<T>(url: string, refreshKey: number) {
 
   // Derived: true when refetching with existing data (not initial load)
   const refreshing = loading && data != null;
+  // Derived: true when serving stale data during background revalidation (not rate-limited)
+  const revalidating = stale && !rateLimited;
 
   const fetchData = useCallback(async (signal?: AbortSignal) => {
     // If refreshKey increased, this is a manual refresh — force bypass cache
@@ -60,6 +63,7 @@ export function useApiData<T>(url: string, refreshKey: number) {
     // Don't clear data/notConfigured/setupHint — keep stale values visible during refetch
     setRateLimited(false);
     setRateLimitReset(null);
+    setStale(false);
 
     const separator = url.includes("?") ? "&" : "?";
     const fetchUrl = isForceRefresh ? `${url}${separator}force=true` : url;
@@ -70,6 +74,14 @@ export function useApiData<T>(url: string, refreshKey: number) {
       if (json.rateLimited) {
         setRateLimited(true);
         setRateLimitReset(json.rateLimitReset ?? null);
+        // Rate-limited responses may include stale cached data
+        if (json.data) {
+          setData(json.data);
+          setFetchedAt(json.fetchedAt ?? null);
+          setCached(true);
+          setStale(true);
+        }
+        setLoading(false);
         return;
       }
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
@@ -91,6 +103,7 @@ export function useApiData<T>(url: string, refreshKey: number) {
       setSetupHint(null);
       setFetchedAt(json.fetchedAt ?? null);
       setCached(json.cached ?? false);
+      setStale(json.stale ?? false);
 
       // Store in client cache
       if (json.data && json.fetchedAt) {
@@ -122,5 +135,5 @@ export function useApiData<T>(url: string, refreshKey: number) {
     return fetchData(); // No signal — user-initiated, not lifecycle-managed
   }, [fetchData]);
 
-  return { data, loading, refreshing, error, notConfigured, setupHint, fetchedAt, cached, rateLimited, rateLimitReset, refetch };
+  return { data, loading, refreshing, error, notConfigured, setupHint, fetchedAt, cached, stale, revalidating, rateLimited, rateLimitReset, refetch };
 }

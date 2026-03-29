@@ -1,10 +1,10 @@
 # Architecture
 
-> Last updated: 2026-03-27. Update this document when making structural changes.
+> Last updated: 2026-03-28. Update this document when making structural changes.
 
 ## Overview
 
-Team Health Dashboard is a Next.js 16 application that aggregates engineering metrics from GitHub, Linear, and Slack, computes a deterministic health score, and optionally generates AI-powered narrative insights. It has no database — all data is fetched on-demand from source APIs on every request.
+Team Health Dashboard is a Next.js 16 application that aggregates engineering metrics from GitHub, Linear, and Slack, computes a deterministic health score, and optionally generates AI-powered narrative insights. Health score snapshots are persisted in SQLite for historical trending. Integration data is fetched on-demand from source APIs.
 
 ### Tech Stack
 
@@ -15,6 +15,7 @@ Team Health Dashboard is a Next.js 16 application that aggregates engineering me
 - **Raw GraphQL fetch** for Linear API (no SDK)
 - **@slack/web-api** for Slack API
 - **Anthropic SDK**, **Ollama**, or **Manual** (any AI chat) for AI analysis
+- **better-sqlite3** for health score snapshot persistence (WAL mode, file-based)
 
 ---
 
@@ -35,7 +36,11 @@ graph TD
     Hook --> API_DORA["/api/dora"]
     Hook --> API_HS["/api/health-summary"]
     Hook --> API_WN["/api/weekly-narrative"]
+    Hook --> API_TR["/api/trends"]
     Hook --> API_CFG["/api/config"]
+
+    API_TR --> SQLite["SQLite (data/health.db)"]
+    API_HS --> SQLite
 
     API_GH --> GitHub["GitHub REST API"]
     API_LN --> Linear["Linear GraphQL API"]
@@ -92,6 +97,7 @@ src/
 │       ├── weekly-narrative/route.ts   # AI prose narrative
 │       ├── ai-prompt/route.ts         # Prompt export for manual AI mode
 │       ├── ai-response/route.ts       # Response import for manual AI mode
+│       ├── trends/route.ts             # Health score trend data (from SQLite)
 │       └── config/route.ts             # Settings read/write
 ├── components/
 │   ├── ThemeProvider.tsx                # Dark/light mode context
@@ -100,7 +106,7 @@ src/
 │   ├── linear/                         # Velocity, workload, time-in-state (7 tabs), stalled
 │   ├── dora/                           # Deploy frequency, lead time, incidents, history
 │   ├── slack/                          # Response time, channel activity, overload
-│   └── ui/                             # Card, Badge, Skeleton, Spinner, ErrorState, RateLimitState, SectionHeader
+│   └── ui/                             # Card, Badge, Skeleton, Spinner, ErrorState, RateLimitState, RateLimitBanner, SectionHeader
 ├── hooks/
 │   └── useApiData.ts                   # Generic fetch hook (all sections use this)
 ├── lib/
@@ -110,11 +116,14 @@ src/
 │   ├── dora.ts                         # DORA metrics: deployments, incidents, correlation
 │   ├── claude.ts                       # AI provider abstraction + prompt builders
 │   ├── scoring.ts                      # Deterministic health score computation
+│   ├── db.ts                           # SQLite singleton (better-sqlite3, WAL mode)
+│   ├── errors.ts                       # Typed errors (RateLimitError)
 │   ├── config.ts                       # Dual config reader (env vars + JSON file)
-│   ├── utils.ts                        # Date helpers, rate limit error handling
+│   ├── utils.ts                        # Date helpers
 │   └── __tests__/                      # Vitest unit tests
 └── types/
-    ├── api.ts                          # ApiResponse<T> envelope
+    ├── api.ts                          # ApiResponse<T> envelope (with stale flag)
+    ├── trends.ts                       # TrendSnapshot, TrendsResponse types
     ├── github.ts, linear.ts, slack.ts  # Domain types
     ├── dora.ts                         # DORA types
     └── metrics.ts                      # Health score + narrative types
@@ -130,7 +139,7 @@ Every section uses the same generic hook:
 
 ```typescript
 const { data, loading, refreshing, error, notConfigured, setupHint,
-        fetchedAt, rateLimited, rateLimitReset, refetch } = useApiData<T>(url, refreshKey);
+        fetchedAt, rateLimited, rateLimitReset, stale, revalidating, refetch } = useApiData<T>(url, refreshKey);
 ```
 
 The hook returns a **standardized envelope** (`ApiResponse<T>`) that enables consistent handling across all sections:
@@ -164,6 +173,7 @@ interface ApiResponse<T> {
   setupHint?: string;
   rateLimited?: boolean;
   rateLimitReset?: string;   // ISO timestamp when limit resets
+  stale?: boolean;           // True when serving cached data during SWR revalidation
 }
 ```
 
@@ -323,27 +333,35 @@ Gear icon → modal with sidebar navigation (GitHub, Linear, Slack, DORA, AI sec
 
 ### Architecture
 
-Server-side in-memory cache with interface-based design for swappable backends.
+Server-side in-memory cache with stale-while-revalidate (SWR) and interface-based design for swappable backends.
 
-- **`src/lib/cache.ts`** — `CacheStore` interface, `InMemoryCacheStore` (Map-backed), `getOrFetch<T>()` helper, `buildCacheKey()`, TTL constants
-- **Pattern**: `getOrFetch(key, ttl, fetcher, { force? })` — returns cached value if fresh, calls fetcher if stale, serves expired cache on error (stale-on-error)
+- **`src/lib/cache.ts`** — `CacheStore` interface, `InMemoryCacheStore` (Map-backed), `getOrFetch<T>()` helper with SWR, `buildCacheKey()`, `getTTL(source)` for configurable TTLs
+- **Pattern**: `getOrFetch(key, ttl, fetcher, { force?, rethrow? })` — returns cached value if fresh; on expiry, serves stale data immediately and fires a background revalidation; serves expired cache on error (stale-on-error)
+- **Background deduplication**: `pendingBackgroundFetches` Set prevents concurrent background fetches for the same key
 - **Cache keys**: deterministic, parameter-aware (e.g., `github:lookbackDays=30:staleDays=7`)
 
-### TTLs
+### TTLs (configurable)
 
-| Source | TTL | Rationale |
-|--------|-----|-----------|
-| GitHub, Linear, Slack, DORA | 5 min | Data routes — balance freshness vs API load |
-| Health Summary | 10 min | Includes LLM call |
-| Weekly Narrative | 15 min | Expensive LLM generation |
+Default TTLs can be overridden via `CACHE_TTL_*` env vars or Settings UI:
+
+| Source | Default TTL | Config Key |
+|--------|-------------|------------|
+| GitHub | 15 min | `CACHE_TTL_GITHUB` |
+| Linear | 15 min | `CACHE_TTL_LINEAR` |
+| Slack | 15 min | `CACHE_TTL_SLACK` |
+| DORA | 15 min | `CACHE_TTL_DORA` |
+| Health Summary | 10 min | `CACHE_TTL_HEALTH_SUMMARY` |
+| Weekly Narrative | 15 min | `CACHE_TTL_WEEKLY_NARRATIVE` |
 
 ### Key behaviors
 
+- **Stale-while-revalidate**: On TTL expiry, stale data is returned immediately with `stale: true`; background fetch refreshes the cache
 - **Force refresh**: Refresh button appends `?force=true`, bypassing cache
-- **Stale-on-error**: Rate limit or network failure serves expired cache if available
+- **Stale-on-error**: Rate limit or network failure serves expired cache if available (also with `stale: true`)
+- **Rate limit propagation**: `rethrow` option re-throws `RateLimitError` so API routes can serve stale data with 429 status
 - **Config invalidation**: `POST /api/config` calls `cache.clear()` — new config means stale cache
 - **Auto-cleanup**: Entries removed at 2x TTL to prevent memory growth
-- **UI indicator**: Sections show "(cached)" in amber next to timestamp when serving cached data
+- **UI indicators**: Amber `RateLimitBanner` for rate-limited stale data; blue `RevalidatingBanner` during SWR background refresh
 
 ### Swapping backends
 
@@ -434,15 +452,59 @@ graph TD
 
 ## Rate Limit Handling
 
-GitHub API rate limits are detected and surfaced:
+All three integration APIs have rate limit detection:
 
-1. **Octokit** throws on 403 rate limit responses (retry plugin disabled for rate limits)
-2. **API routes** catch rate limit errors, return `{ rateLimited: true, rateLimitReset }` with 429 status
-3. **useApiData** detects `rateLimited` in response, sets state
-4. **RateLimitState component** shows amber clock icon with countdown to reset time
-5. **Per-section refresh buttons** are hidden during rate limit state
+1. **GitHub** (`lib/github.ts`): Catches `RequestError` on 429 and 403 with `x-ratelimit-remaining: 0`, throws typed `RateLimitError`
+2. **Linear** (`lib/linear.ts`): Checks `res.status === 429` before `!res.ok`, throws `RateLimitError`
+3. **Slack** (`lib/slack.ts`): Duck-types `code === "slack_webapi_rate_limited"`, throws `RateLimitError`
+4. **API routes** catch `RateLimitError`, serve stale cached data (if available) with `{ rateLimited: true, rateLimitReset, stale: true }` and 429 status
+5. **useApiData** detects `rateLimited` and `stale` in response, exposes `revalidating` derived state
+6. **UI**: `RateLimitBanner` (amber, inline) shows over stale data; `RateLimitState` (full-page) shows only when no cached data available; `RevalidatingBanner` (blue) shows during SWR background refresh
+7. **Per-section refresh buttons** are hidden during rate limit state
 
-Rate limit detection is implemented for GitHub and DORA sections. Linear and Slack rate limiting is not yet handled.
+### RateLimitError class
+
+`src/lib/errors.ts` — `RateLimitError` extends `Error` with optional `retryAfter` (seconds) and `provider` (string) fields. Used by all integration libs and the cache's `rethrow` option.
+
+---
+
+## Persistence Layer
+
+### SQLite (better-sqlite3)
+
+`src/lib/db.ts` — lightweight persistence for health score snapshots.
+
+- **Database**: `data/health.db` (gitignored via `/data/` in `.gitignore`)
+- **Mode**: WAL (Write-Ahead Logging) for concurrent reads during SWR background fetches
+- **Singleton**: `globalThis.__db` pattern (same as cache's `__apiCache`) prevents multiple connections in dev hot-reload
+- **Busy timeout**: 5000ms for lock contention
+
+### Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS health_snapshots (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  date       TEXT    NOT NULL UNIQUE,  -- ISO date (YYYY-MM-DD), one row per day
+  created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+  score      INTEGER NOT NULL,         -- Health score 0-100
+  band       TEXT    NOT NULL,         -- 'healthy' | 'warning' | 'critical'
+  deductions TEXT    NOT NULL          -- JSON array of all ScoreDeduction objects
+);
+```
+
+### API
+
+- `writeSnapshot(score, band, deductions)` — called from `/api/health-summary` on fresh (non-cached) fetches. Uses `INSERT OR REPLACE` keyed on date for one snapshot per day. Wrapped in try/catch so DB failures never break the health summary response.
+- `getSnapshots(days)` — returns snapshots within the last N days, ordered by date ascending.
+- `GET /api/trends?days=7|30|90` — public API that reads snapshots and returns `TrendsResponse`.
+
+### Trend Chart
+
+`HealthTrendChart.tsx` — Recharts `LineChart` embedded in `HealthSummaryCard`:
+- Colored `ReferenceArea` health band zones (green 80-100, amber 60-79, red 0-59)
+- Pill-style 7d/30d/90d period selector
+- `ScoreTooltip` with per-signal deduction breakdown
+- Empty state when <= 1 snapshot available
 
 ---
 
@@ -454,5 +516,5 @@ Rate limit detection is implemented for GitHub and DORA sections. Linear and Sla
 - React hooks must be called before any conditional early returns (Rules of Hooks)
 - Local LLMs (Ollama) frequently ignore prompt instructions — compensated with JSON mode, temperature 0, and post-processing
 - Slack integration has not been verified with a live workspace
-- Server-side in-memory cache (5min TTL for data routes, 10-15min for AI routes) — lost on restart, no cross-worker sharing
-- No persistence — all data is ephemeral snapshots, no historical trending
+- Server-side in-memory cache is lost on restart (no cross-worker sharing), but SQLite snapshots persist across restarts
+- SQLite stores one health score snapshot per day — sub-daily granularity is not tracked
