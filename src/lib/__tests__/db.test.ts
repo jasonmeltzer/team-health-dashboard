@@ -49,7 +49,7 @@ function getSnapshots(db: Database.Database, days: number) {
 }
 
 const sampleDeductions: ScoreDeduction[] = [
-  { signal: "Cycle time", source: "github", points: 4, maxPoints: 8, detail: ">24h avg" },
+  { signal: "Cycle time", category: "github", points: 4, maxPoints: 8, detail: ">24h avg" },
 ];
 
 beforeEach(() => {
