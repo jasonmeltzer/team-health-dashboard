@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import FocusTrap from "focus-trap-react";
 import { cn } from "@/lib/utils";
 
 interface ConfigStatus {
@@ -59,12 +58,25 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
     }
   }, []);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (open) {
       fetchStatus();
       setMessage(null);
+      // Focus the dialog on open so Escape works immediately
+      requestAnimationFrame(() => dialogRef.current?.focus());
     }
   }, [open, fetchStatus]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -137,12 +149,13 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <FocusTrap active={open} focusTrapOptions={{ initialFocus: false, escapeDeactivates: true, onDeactivate: onClose }}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-modal-title"
-        className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+        tabIndex={-1}
+        className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-zinc-200 bg-white shadow-xl outline-none dark:border-zinc-700 dark:bg-zinc-900"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-700">
@@ -479,7 +492,6 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
           </div>
         </div>
       </div>
-      </FocusTrap>
     </div>
   );
 }
