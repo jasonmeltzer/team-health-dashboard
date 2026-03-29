@@ -20,14 +20,6 @@ function initSchema(db: Database.Database) {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_snapshots_date ON health_snapshots(date)
   `);
-  // Migration: add date column if upgrading from schema without it
-  try {
-    db.exec(`ALTER TABLE health_snapshots ADD COLUMN date TEXT`);
-    db.exec(`UPDATE health_snapshots SET date = substr(created_at, 1, 10) WHERE date IS NULL`);
-    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_snapshots_date_unique ON health_snapshots(date)`);
-  } catch {
-    // Column already exists — expected on fresh installs
-  }
 }
 
 export function getDb(): Database.Database {
