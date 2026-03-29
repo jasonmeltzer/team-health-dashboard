@@ -476,7 +476,7 @@ All three integration APIs have rate limit detection:
 
 - **Database**: `data/health.db` (gitignored via `/data/` in `.gitignore`)
 - **Mode**: WAL (Write-Ahead Logging) for concurrent reads during SWR background fetches
-- **Singleton**: `globalThis.__healthDb` pattern (same as cache) prevents multiple connections in dev hot-reload
+- **Singleton**: `globalThis.__db` pattern (same as cache's `__apiCache`) prevents multiple connections in dev hot-reload
 - **Busy timeout**: 5000ms for lock contention
 
 ### Schema
