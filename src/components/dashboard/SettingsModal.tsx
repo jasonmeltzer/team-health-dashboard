@@ -52,6 +52,10 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
         if (json.data.aiProvider) {
           setAi((s) => ({ ...s, provider: json.data.aiProvider }));
         }
+        // Sync cache TTL fields with saved values
+        if (json.data.cacheTtl) {
+          setCacheTtl(json.data.cacheTtl);
+        }
       }
     } catch {
       // ignore
