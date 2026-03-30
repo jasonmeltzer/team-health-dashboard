@@ -141,7 +141,7 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
   if (!data) return null;
 
   return (
-    <div className="space-y-4">
+    <div id="github-section" className="space-y-4">
       <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
       {rateLimited && (
         <RateLimitBanner

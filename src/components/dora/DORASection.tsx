@@ -135,7 +135,7 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
   const s = data.summary;
 
   return (
-    <div className="space-y-4">
+    <div id="dora-section" className="space-y-4">
       <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
       {rateLimited && (
         <RateLimitBanner

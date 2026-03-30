@@ -92,7 +92,7 @@ export function SlackSection({ refreshKey }: { refreshKey: number }) {
   if (!data) return null;
 
   return (
-    <div className="space-y-4">
+    <div id="slack-section" className="space-y-4">
       <SectionHeader title="Slack" icon={<SlackIcon />} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
       {rateLimited && (
         <RateLimitBanner

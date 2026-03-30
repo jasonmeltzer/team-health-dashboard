@@ -247,7 +247,7 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
     : data.stalledIssues;
 
   return (
-    <div className="space-y-4">
+    <div id="linear-section" className="space-y-4">
       <SectionHeader title="Linear" icon={<LinearIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
       {rateLimited && (
         <RateLimitBanner

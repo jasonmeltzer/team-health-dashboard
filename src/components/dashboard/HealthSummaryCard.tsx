@@ -30,13 +30,13 @@ function ScoreInfo() {
     <div className="relative inline-block" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-medium text-zinc-500 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600"
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-normal text-zinc-500 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600"
       >
         ?
       </button>
       {open && (
         <div className="absolute left-0 top-6 z-50 w-80 rounded-lg border border-zinc-200 bg-white p-3 text-xs text-zinc-600 shadow-lg dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
-          <p className="mb-2 font-medium text-zinc-700 dark:text-zinc-300">
+          <p className="mb-2 font-semibold text-zinc-700 dark:text-zinc-300">
             How the score works
           </p>
           <p className="mb-2">
@@ -45,22 +45,22 @@ function ScoreInfo() {
             always produces the same score.
           </p>
 
-          <p className="mb-1.5 font-medium text-zinc-500">Signals checked:</p>
+          <p className="mb-1.5 font-normal text-zinc-500">Signals checked:</p>
           <div className="mb-2 space-y-1.5">
             <div>
-              <p className="font-medium text-zinc-700 dark:text-zinc-300">GitHub (up to 30 pts)</p>
+              <p className="font-semibold text-zinc-700 dark:text-zinc-300">GitHub (up to 30 pts)</p>
               <p>Avg cycle time, stale PRs, review queue backup, cycle time trend</p>
             </div>
             <div>
-              <p className="font-medium text-zinc-700 dark:text-zinc-300">Linear (up to 30 pts)</p>
+              <p className="font-semibold text-zinc-700 dark:text-zinc-300">Linear (up to 30 pts)</p>
               <p>Stalled issues, workload imbalance, velocity trend, flow efficiency, WIP per person, long-running items</p>
             </div>
             <div>
-              <p className="font-medium text-zinc-700 dark:text-zinc-300">DORA (up to 20 pts)</p>
+              <p className="font-semibold text-zinc-700 dark:text-zinc-300">DORA (up to 20 pts)</p>
               <p>Deploy frequency, lead time, change failure rate, MTTR</p>
             </div>
             <div>
-              <p className="font-medium text-zinc-700 dark:text-zinc-300">Slack (up to 20 pts)</p>
+              <p className="font-semibold text-zinc-700 dark:text-zinc-300">Slack (up to 20 pts)</p>
               <p>Response time, overloaded members, response time trend</p>
             </div>
           </div>
@@ -76,15 +76,15 @@ function ScoreInfo() {
 
           <div className="space-y-0.5 border-t border-zinc-100 pt-2 dark:border-zinc-700">
             <p>
-              <span className="font-medium text-emerald-600">80-100 Healthy</span>{" "}
+              <span className="font-semibold text-emerald-600">80-100 Healthy</span>{" "}
               — smooth flow, no major blockers
             </p>
             <p>
-              <span className="font-medium text-amber-600">60-79 Warning</span>{" "}
+              <span className="font-semibold text-amber-600">60-79 Warning</span>{" "}
               — some bottlenecks or stalled work
             </p>
             <p>
-              <span className="font-medium text-red-600">0-59 Critical</span>{" "}
+              <span className="font-semibold text-red-600">0-59 Critical</span>{" "}
               — significant blockers need attention
             </p>
           </div>
@@ -101,6 +101,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   dora: "DORA",
 };
 
+const CATEGORY_SECTION_IDS: Record<string, string> = {
+  github: "github-section",
+  linear: "linear-section",
+  slack: "slack-section",
+  dora: "dora-section",
+};
+
 function ScoreBreakdown({
   deductions,
   onClose,
@@ -109,7 +116,6 @@ function ScoreBreakdown({
   onClose: () => void;
 }) {
   const withPoints = deductions.filter((d) => d.points > 0);
-  const clean = deductions.filter((d) => d.points === 0);
 
   // Group by category
   const categories = Array.from(new Set(deductions.map((d) => d.category)));
@@ -117,14 +123,14 @@ function ScoreBreakdown({
   return (
     <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
           Score Breakdown
         </p>
         <button
           onClick={onClose}
           className="text-xs text-zinc-400 hover:text-zinc-600"
         >
-          close
+          Close breakdown
         </button>
       </div>
 
@@ -134,34 +140,66 @@ function ScoreBreakdown({
         const catMax = catDeductions.reduce((s, d) => s + d.maxPoints, 0);
         return (
           <div key={cat} className="mb-3 last:mb-0">
-            <p className="mb-1 text-xs font-medium text-zinc-500">
+            <p className="mb-1 text-xs font-normal text-zinc-500">
               {CATEGORY_LABELS[cat] || cat}{" "}
-              <span className="font-normal text-zinc-400">
-                ({catLost}/{catMax} pts deducted)
+              <span className="text-zinc-400">
+                &minus;{catLost} / {catMax} pts
               </span>
             </p>
             <div className="space-y-1">
-              {catDeductions.map((d) => (
-                <div
-                  key={d.signal}
-                  className="flex items-center justify-between text-xs"
-                >
-                  <span className="text-zinc-600 dark:text-zinc-400">
-                    {d.signal}
-                    <span className="ml-1.5 text-zinc-400">{d.detail}</span>
-                  </span>
-                  <span
+              {catDeductions.map((d) => {
+                const isClickable = d.points > 0;
+                const sectionId = CATEGORY_SECTION_IDS[d.category];
+                const handleScroll = () => {
+                  if (sectionId) {
+                    document
+                      .getElementById(sectionId)
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }
+                };
+                return (
+                  <div
+                    key={d.signal}
                     className={cn(
-                      "ml-2 font-mono whitespace-nowrap",
-                      d.points > 0
-                        ? "font-medium text-red-500"
-                        : "text-emerald-500"
+                      "flex items-center justify-between text-xs",
+                      isClickable
+                        ? "cursor-pointer rounded px-1 -mx-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        : "opacity-50"
                     )}
+                    {...(isClickable
+                      ? {
+                          role: "button",
+                          tabIndex: 0,
+                          onClick: handleScroll,
+                          onKeyDown: (e: React.KeyboardEvent) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleScroll();
+                            }
+                          },
+                        }
+                      : {})}
                   >
-                    {d.points > 0 ? `−${d.points}` : "✓"}
-                  </span>
-                </div>
-              ))}
+                    <span className="text-zinc-600 dark:text-zinc-400">
+                      {d.signal}
+                      <span className="ml-1.5 text-zinc-400">{d.detail}</span>
+                      {isClickable && (
+                        <span className="ml-1 text-zinc-400"> ↗</span>
+                      )}
+                    </span>
+                    <span
+                      className={cn(
+                        "ml-2 font-mono whitespace-nowrap",
+                        d.points > 0
+                          ? "font-semibold text-red-500"
+                          : "text-emerald-500"
+                      )}
+                    >
+                      {d.points > 0 ? `−${d.points}` : "✓"}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -170,11 +208,6 @@ function ScoreBreakdown({
       {withPoints.length === 0 && (
         <p className="text-xs text-emerald-600">
           All signals are healthy — no deductions.
-        </p>
-      )}
-      {clean.length > 0 && withPoints.length > 0 && (
-        <p className="mt-2 text-xs text-zinc-400">
-          {clean.length} signal{clean.length !== 1 ? "s" : ""} healthy (no deduction).
         </p>
       )}
     </div>
@@ -215,25 +248,25 @@ function ManualModeControls({ onImported }: { onImported: () => void }) {
         <button
           onClick={handleDownload}
           disabled={downloading}
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-normal text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
         >
           {downloading ? "Generating..." : "Download Prompt"}
         </button>
         <button
           onClick={() => setImportOpen(true)}
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-normal text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           Import Response
         </button>
       </div>
       {showNextSteps && (
         <div className="mt-2 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">
-          <p className="font-medium">Next steps:</p>
+          <p className="font-semibold">Next steps:</p>
           <ol className="mt-1 list-inside list-decimal space-y-0.5">
             <li>Upload the downloaded file to any AI chat</li>
-            <li>Tell it: <span className="font-medium">&quot;See file for instructions. Please create a file with your response.&quot;</span></li>
+            <li>Tell it: <span className="font-semibold">&quot;See file for instructions. Please create a file with your response.&quot;</span></li>
             <li>Download the AI&apos;s response file (or copy its text)</li>
-            <li>Click <span className="font-medium">Import Response</span> above to upload it here</li>
+            <li>Click <span className="font-semibold">Import Response</span> above to upload it here</li>
           </ol>
         </div>
       )}
@@ -250,12 +283,24 @@ function ManualModeControls({ onImported }: { onImported: () => void }) {
   );
 }
 
-export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
+export function HealthSummaryCard({
+  refreshKey,
+  onDeductionsLoaded,
+}: {
+  refreshKey: number;
+  onDeductionsLoaded?: (deductions: ScoreDeduction[]) => void;
+}) {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const { data, loading, error, notConfigured, setupHint, cached, stale, rateLimited, fetchedAt, refetch } = useApiData<HealthSummary>(
     "/api/health-summary",
     refreshKey
   );
+
+  useEffect(() => {
+    if (data?.scoreBreakdown && onDeductionsLoaded) {
+      onDeductionsLoaded(data.scoreBreakdown);
+    }
+  }, [data?.scoreBreakdown, onDeductionsLoaded]);
 
   if (notConfigured) return null;
 
@@ -279,10 +324,10 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
       <Card className="col-span-full">
         <div className="flex items-start gap-4">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
-            <span className="text-xl text-zinc-400">?</span>
+            <span className="text-lg text-zinc-400">?</span>
           </div>
           <div>
-            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
               Team Health
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
@@ -351,14 +396,14 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
               strokeLinecap="round"
             />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-zinc-900 dark:text-zinc-100">
+          <span className="absolute inset-0 flex items-center justify-center text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
             {data.score}
           </span>
         </div>
 
         <div className="flex-1 space-y-3">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+            <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
               Team Health
               <ScoreInfo />
             </h2>
@@ -389,7 +434,7 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
             <>
               {data.insights.length > 0 && (
                 <div>
-                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
+                  <p className="mb-1 text-xs font-normal uppercase tracking-wide text-zinc-400">
                     Score signals
                   </p>
                   <ul className="space-y-0.5">
@@ -426,7 +471,7 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
 
               {data.recommendations.length > 0 && (
                 <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  <p className="mb-1 text-xs font-normal uppercase tracking-wide text-zinc-500">
                     Recommendations
                   </p>
                   <ul className="space-y-1">
@@ -451,7 +496,12 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
         </div>
       </div>
 
-      {/* Score breakdown panel */}
+      {/* Score trend chart */}
+      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+        <HealthTrendChart refreshKey={refreshKey} />
+      </div>
+
+      {/* Score breakdown panel — below trend chart */}
       {showBreakdown && data.scoreBreakdown && (
         <div className="mt-4">
           <ScoreBreakdown
@@ -460,11 +510,6 @@ export function HealthSummaryCard({ refreshKey }: { refreshKey: number }) {
           />
         </div>
       )}
-
-      {/* Score trend chart */}
-      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-        <HealthTrendChart refreshKey={refreshKey} />
-      </div>
     </Card>
   );
 }
