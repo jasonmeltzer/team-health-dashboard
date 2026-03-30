@@ -66,5 +66,11 @@ export function getConfigStatus(): Record<string, boolean | string | Record<stri
       healthSummary: getConfig("CACHE_TTL_HEALTH_SUMMARY") || "",
       weeklyNarrative: getConfig("CACHE_TTL_WEEKLY_NARRATIVE") || "",
     },
+    scoringWeights: {
+      github: getConfig("SCORE_WEIGHT_GITHUB") || "",
+      linear: getConfig("SCORE_WEIGHT_LINEAR") || "",
+      slack: getConfig("SCORE_WEIGHT_SLACK") || "",
+      dora: getConfig("SCORE_WEIGHT_DORA") || "",
+    },
   };
 }

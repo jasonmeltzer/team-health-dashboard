@@ -4,7 +4,7 @@ import { fetchLinearMetrics } from "@/lib/linear";
 import { fetchSlackMetrics } from "@/lib/slack";
 import { fetchDORAMetrics } from "@/lib/dora";
 import { generateHealthSummary, isAIConfigured, getProvider, OllamaNotRunningError } from "@/lib/claude";
-import { computeHealthScore, type ScoreDeduction } from "@/lib/scoring";
+import { computeHealthScore, type ScoreDeduction, type ScoreWeights } from "@/lib/scoring";
 import { getConfig } from "@/lib/config";
 import { getOrFetch, buildCacheKey, cache, getTTL } from "@/lib/cache";
 import { writeSnapshot } from "@/lib/db";
@@ -53,6 +53,21 @@ async function fetchSourceData() {
   return { github, linear, slack, dora };
 }
 
+function getScoreWeights(): ScoreWeights {
+  const parse = (key: string) => {
+    const v = getConfig(key);
+    if (!v) return undefined;
+    const n = parseInt(v, 10);
+    return isNaN(n) ? undefined : n / 100;
+  };
+  return {
+    github: parse("SCORE_WEIGHT_GITHUB"),
+    linear: parse("SCORE_WEIGHT_LINEAR"),
+    slack: parse("SCORE_WEIGHT_SLACK"),
+    dora: parse("SCORE_WEIGHT_DORA"),
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const force = request.nextUrl.searchParams.get("force") === "true";
@@ -61,7 +76,8 @@ export async function GET(request: NextRequest) {
     if (provider === "manual") {
       // Always re-compute the deterministic score (even on force refresh)
       const { github, linear, slack, dora } = await fetchSourceData();
-      const scoreResult = computeHealthScore(github, linear, slack, dora);
+      const weights = getScoreWeights();
+      const scoreResult = computeHealthScore(github, linear, slack, dora, weights);
 
       // Persist snapshot on every fresh compute (PERS-01, D-10)
       try {
@@ -135,7 +151,8 @@ export async function GET(request: NextRequest) {
       getTTL("healthSummary"),
       async () => {
         const { github, linear, slack, dora } = await fetchSourceData();
-        const scoreResult = computeHealthScore(github, linear, slack, dora);
+        const weights = getScoreWeights();
+        const scoreResult = computeHealthScore(github, linear, slack, dora, weights);
 
         // Persist snapshot on every fresh compute (PERS-01, D-10)
         try {

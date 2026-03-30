@@ -20,6 +20,13 @@ export interface ScoreResult {
   deductions: ScoreDeduction[];
 }
 
+export interface ScoreWeights {
+  github?: number; // 0.0-1.0 multiplier (from 0-100 slider / 100)
+  linear?: number;
+  slack?: number;
+  dora?: number;
+}
+
 /* ─── GitHub (max 30 pts) ─────────────────────────────────────────────── */
 
 function scoreGitHub(github: PRMetrics): ScoreDeduction[] {
@@ -400,7 +407,8 @@ export function computeHealthScore(
   github: PRMetrics | null,
   linear: LinearMetrics | null,
   slack: SlackMetrics | null,
-  dora: DORAMetrics | null = null
+  dora: DORAMetrics | null = null,
+  weights: ScoreWeights = {}
 ): ScoreResult {
   const deductions: ScoreDeduction[] = [];
 
@@ -409,8 +417,15 @@ export function computeHealthScore(
   if (slack) deductions.push(...scoreSlack(slack));
   if (dora && dora.summary.totalDeployments > 0) deductions.push(...scoreDORA(dora));
 
-  const totalDeductions = deductions.reduce((s, d) => s + d.points, 0);
-  const maxPossible = deductions.reduce((s, d) => s + d.maxPoints, 0);
+  const w = { github: 1, linear: 1, slack: 1, dora: 1, ...weights };
+  const totalDeductions = deductions.reduce(
+    (s, d) => s + d.points * (w[d.category as keyof typeof w] ?? 1),
+    0
+  );
+  const maxPossible = deductions.reduce(
+    (s, d) => s + d.maxPoints * (w[d.category as keyof typeof w] ?? 1),
+    0
+  );
 
   const score =
     maxPossible > 0
