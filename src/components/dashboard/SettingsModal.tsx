@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { WeightSliders } from "./WeightSliders";
+import type { ScoreDeduction } from "@/types/metrics";
 
 interface ConfigStatus {
   github: boolean;
@@ -16,6 +18,7 @@ interface SettingsModalProps {
   onClose: () => void;
   onSaved: () => void;
   initialSection?: Section;
+  deductions?: ScoreDeduction[] | null;
 }
 
 type Section = "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring";
@@ -30,7 +33,7 @@ const SECTIONS: { key: Section; label: string; description: string }[] = [
   { key: "scoring", label: "Scoring", description: "Integration weight adjustments" },
 ];
 
-export function SettingsModal({ open, onClose, onSaved, initialSection = "github" }: SettingsModalProps) {
+export function SettingsModal({ open, onClose, onSaved, initialSection = "github", deductions }: SettingsModalProps) {
   const [status, setStatus] = useState<ConfigStatus | null>(null);
   const [activeSection, setActiveSection] = useState<Section>("github");
   const [saving, setSaving] = useState(false);
@@ -43,6 +46,7 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
   const [doraSettings, setDoraSettings] = useState({ source: "auto", environment: "production", incidentLabels: "incident,hotfix,production-bug" });
   const [ai, setAi] = useState({ provider: "ollama", anthropicKey: "", ollamaUrl: "", ollamaModel: "" });
   const [cacheTtl, setCacheTtl] = useState({ github: "", linear: "", slack: "", dora: "", healthSummary: "", weeklyNarrative: "" });
+  const [scoringWeights, setScoringWeights] = useState({ github: "", linear: "", slack: "", dora: "" });
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -59,7 +63,7 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
           setCacheTtl(json.data.cacheTtl);
         }
         if (json.data.scoringWeights) {
-          // Store for WeightSliders — Plan 03 will consume this
+          setScoringWeights(json.data.scoringWeights);
         }
       }
     } catch {
@@ -409,13 +413,21 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
             )}
 
             {activeSection === "scoring" && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Scoring Weights</h3>
-                <p className="text-sm font-normal text-zinc-500">
-                  Adjust how much each integration contributes to the health score. Disconnected integrations are excluded from scoring.
-                </p>
-                <p className="text-xs font-normal text-zinc-400">Weight sliders will appear here after setup.</p>
-              </div>
+              <WeightSliders
+                configStatus={status}
+                deductions={deductions ?? null}
+                initialWeights={scoringWeights}
+                onSave={async (weights) => {
+                  const res = await fetch("/api/config", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(weights),
+                  });
+                  if (!res.ok) throw new Error("Save failed");
+                  onSaved();
+                }}
+                onOpenSection={(section) => setActiveSection(section as Section)}
+              />
             )}
 
             {activeSection === "ai" && (

@@ -49,9 +49,6 @@ export function DashboardShell() {
     setSettingsOpen(true);
   }, []);
 
-  // Suppress unused variable warning — lastDeductions is reserved for Plan 03 (WeightSliders)
-  void lastDeductions;
-
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
@@ -124,6 +121,7 @@ export function DashboardShell() {
           refetchConfig();
         }}
         initialSection={settingsInitialSection}
+        deductions={lastDeductions}
       />
 
       {/* Onboarding: Welcome hero when nothing configured, banner when partially configured */}
