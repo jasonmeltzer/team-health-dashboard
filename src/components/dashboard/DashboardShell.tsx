@@ -4,20 +4,32 @@ import { useState, useCallback, useRef } from "react";
 import { RefreshButton } from "./RefreshButton";
 import { SettingsModal } from "./SettingsModal";
 import { clearClientCache } from "@/hooks/useApiData";
+import { useConfigStatus } from "@/hooks/useConfigStatus";
 import { HealthSummaryCard } from "./HealthSummaryCard";
+import { WelcomeHero } from "./WelcomeHero";
+import { SetupBanner } from "./SetupBanner";
 import { WeeklyNarrativeCard } from "./WeeklyNarrativeCard";
 import { GitHubSection } from "@/components/github/GitHubSection";
 import { LinearSection } from "@/components/linear/LinearSection";
 import { SlackSection } from "@/components/slack/SlackSection";
 import { DORASection } from "@/components/dora/DORASection";
 import { useTheme } from "@/components/ThemeProvider";
+import { Card } from "@/components/ui/Card";
+import { Skeleton } from "@/components/ui/Skeleton";
+import type { ScoreDeduction } from "@/types/metrics";
 
 export function DashboardShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<
+    "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"
+  >("github");
+  const [lastDeductions, setLastDeductions] = useState<ScoreDeduction[] | null>(null);
   const { theme, toggleTheme } = useTheme();
   const [poorChoice, setPoorChoice] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { status: configStatus, allUnconfigured, unconfiguredList, refetch: refetchConfig } = useConfigStatus(refreshKey);
 
   const handleThemeToggle = useCallback(() => {
     if (theme === "dark") {
@@ -32,12 +44,20 @@ export function DashboardShell() {
     }
   }, [theme, toggleTheme]);
 
+  const handleConnect = useCallback((section: "github" | "linear" | "slack" | "ai") => {
+    setSettingsInitialSection(section);
+    setSettingsOpen(true);
+  }, []);
+
+  // Suppress unused variable warning — lastDeductions is reserved for Plan 03 (WeightSliders)
+  void lastDeductions;
+
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
             Team Health Dashboard
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -49,7 +69,7 @@ export function DashboardShell() {
           <button
             suppressHydrationWarning
             onClick={handleThemeToggle}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-normal text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           >
             {theme === "dark" ? (
@@ -101,11 +121,38 @@ export function DashboardShell() {
         onSaved={() => {
           clearClientCache();
           setRefreshKey((k) => k + 1);
+          refetchConfig();
         }}
+        initialSection={settingsInitialSection}
       />
 
-      {/* AI Summary */}
-      <HealthSummaryCard refreshKey={refreshKey} />
+      {/* Onboarding: Welcome hero when nothing configured, banner when partially configured */}
+      {configStatus === null ? (
+        /* Loading skeleton — same as HealthSummaryCard loading state */
+        <Card className="col-span-full">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-16 w-16 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-4 w-96" />
+              <Skeleton className="h-4 w-72" />
+            </div>
+          </div>
+        </Card>
+      ) : allUnconfigured ? (
+        <WelcomeHero status={configStatus} onConnect={handleConnect} />
+      ) : (
+        <>
+          <SetupBanner
+            unconfigured={unconfiguredList}
+            onConnect={() => {
+              setSettingsInitialSection("github");
+              setSettingsOpen(true);
+            }}
+          />
+          <HealthSummaryCard refreshKey={refreshKey} onDeductionsLoaded={setLastDeductions} />
+        </>
+      )}
 
       {/* Data Sections */}
       <GitHubSection refreshKey={refreshKey} />
