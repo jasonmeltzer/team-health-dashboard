@@ -69,6 +69,9 @@ function makeLinear(overrides: Partial<{
       leadTimeTrend: [],
     },
     stalledIssues: [],
+    timeInStateByCycle: {},
+    stalledIssuesByCycle: {},
+    summaryByCycle: {},
   };
 }
 
