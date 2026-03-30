@@ -153,10 +153,10 @@ export function DashboardShell() {
       )}
 
       {/* Data Sections */}
-      <GitHubSection refreshKey={refreshKey} />
-      <LinearSection refreshKey={refreshKey} />
-      <DORASection refreshKey={refreshKey} />
-      <SlackSection refreshKey={refreshKey} />
+      <GitHubSection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
+      <LinearSection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
+      <DORASection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
+      <SlackSection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
 
       {/* Weekly Narrative */}
       <WeeklyNarrativeCard refreshKey={refreshKey} />

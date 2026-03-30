@@ -131,7 +131,7 @@ function CyclePicker({
 }
 
 
-export function LinearSection({ refreshKey }: { refreshKey: number }) {
+export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: number; onOpenSettings?: (section: string) => void }) {
   const [viewMode, setViewMode] = useState<ViewMode>("weekly");
   const [sliderDays, setSliderDays] = useState(42);
   const [committedDays, setCommittedDays] = useState(42);
@@ -148,13 +148,23 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
   if (notConfigured) {
     return (
       <Card>
-        <SectionHeader title="Linear" icon={<LinearIcon />} />
-        <p className="text-sm text-zinc-500">
-          Sprint velocity, workload distribution, time-in-state analysis, and stalled issue tracking.
-        </p>
-        <p className="mt-2 text-xs text-zinc-400">
-          Add your Linear API key and team ID in Settings to enable.
-        </p>
+        <div id="linear-section" className="min-h-[200px] flex flex-col items-center justify-center text-center px-4">
+          <SectionHeader title="Linear" icon={<LinearIcon />} />
+          <p className="mt-4 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            Linear not connected
+          </p>
+          <p className="mt-1 text-sm font-normal text-zinc-600 dark:text-zinc-400 max-w-md">
+            Sprint velocity, workload distribution, and time-in-state appear here. Add your API key and team ID in Settings.
+          </p>
+          {onOpenSettings && (
+            <button
+              onClick={() => onOpenSettings("linear")}
+              className="mt-4 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-normal text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Connect Linear
+            </button>
+          )}
+        </div>
       </Card>
     );
   }
@@ -327,16 +337,22 @@ export function LinearSection({ refreshKey }: { refreshKey: number }) {
       )}
 
       <Card>
-        <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
           {isCycles ? "Sprint Velocity" : "Weekly Throughput"}
         </h3>
-        <VelocityChart
-          data={data.velocityTrend}
-          selectedCycle={isCycles ? activeCycleName : undefined}
-          onBarClick={isCycles ? (name) => {
-            setSelectedCycleName(name === currentCycleName ? null : name);
-          } : undefined}
-        />
+        {data.velocityTrend.length === 0 ? (
+          <p className="py-8 text-center text-sm font-normal text-zinc-500">
+            No issues updated in the selected range. Try extending the lookback.
+          </p>
+        ) : (
+          <VelocityChart
+            data={data.velocityTrend}
+            selectedCycle={isCycles ? activeCycleName : undefined}
+            onBarClick={isCycles ? (name) => {
+              setSelectedCycleName(name === currentCycleName ? null : name);
+            } : undefined}
+          />
+        )}
       </Card>
 
       <Card>
