@@ -402,12 +402,9 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
         </div>
       </Card>
 
-      {isCycles && data.scopeChanges && (
+      {isCycles && data.scopeChangesByCycle?.[activeCycleName] && (
         <ScopeChangesCard
-          summary={data.scopeChanges}
-          scopeChangesByCycle={data.scopeChangesByCycle}
-          cycles={data.availableCycles}
-          currentCycleName={data.summary.currentCycleName}
+          summary={data.scopeChangesByCycle[activeCycleName]}
         />
       )}
 

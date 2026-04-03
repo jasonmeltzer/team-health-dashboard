@@ -1,15 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { ScopeChangeSummary, ScopeChange, CycleInfo } from "@/types/linear";
+import type { ScopeChangeSummary, ScopeChange } from "@/types/linear";
 import { Card } from "@/components/ui/Card";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 interface ScopeChangesCardProps {
   summary: ScopeChangeSummary;
-  scopeChangesByCycle?: Record<string, ScopeChangeSummary>;
-  cycles?: CycleInfo[];
-  currentCycleName?: string;
 }
 
 function ScopeChangeRow({ change }: { change: ScopeChange }) {
@@ -70,17 +67,8 @@ function ScopeChangeRow({ change }: { change: ScopeChange }) {
   );
 }
 
-export function ScopeChangesCard({ summary, scopeChangesByCycle, cycles, currentCycleName }: ScopeChangesCardProps) {
+export function ScopeChangesCard({ summary }: ScopeChangesCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const [selectedCycle, setSelectedCycle] = useState<string | null>(null);
-
-  const hasCyclePicker = scopeChangesByCycle && cycles && cycles.length > 0;
-  const activeCycleName = selectedCycle && scopeChangesByCycle?.[selectedCycle]
-    ? selectedCycle
-    : currentCycleName ?? null;
-  const activeSummary = activeCycleName && scopeChangesByCycle?.[activeCycleName]
-    ? scopeChangesByCycle[activeCycleName]
-    : summary;
 
   return (
     <div id="scope-changes">
@@ -97,18 +85,18 @@ export function ScopeChangesCard({ summary, scopeChangesByCycle, cycles, current
           </h3>
           <div className="flex items-center gap-3">
             <span className="text-xs text-zinc-500">
-              +{activeSummary.added} added&nbsp;&nbsp;{"\u2212"}{activeSummary.removed} removed
+              +{summary.added} added&nbsp;&nbsp;{"\u2212"}{summary.removed} removed
             </span>
             <span
               className={cn(
                 "rounded-full px-2 py-0.5 text-xs font-medium",
-                activeSummary.net > 0
+                summary.net > 0
                   ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                   : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
               )}
             >
-              net {activeSummary.net >= 0 ? "+" : ""}
-              {activeSummary.net}
+              net {summary.net >= 0 ? "+" : ""}
+              {summary.net}
             </span>
             <span className="text-zinc-400 text-sm" aria-hidden="true">
               {expanded ? "\u25B2" : "\u25BC"}
@@ -116,44 +104,14 @@ export function ScopeChangesCard({ summary, scopeChangesByCycle, cycles, current
           </div>
         </button>
 
-        {/* Cycle picker — shown when multiple cycles have scope data */}
-        {expanded && hasCyclePicker && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {cycles.map((c) => {
-              const isActive = c.name === activeCycleName;
-              const hasScopeData = !!scopeChangesByCycle[c.name];
-              return (
-                <button
-                  key={c.id}
-                  onClick={(e) => { e.stopPropagation(); setSelectedCycle(c.name); }}
-                  disabled={!hasScopeData}
-                  className={cn(
-                    "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
-                    isActive
-                      ? "border-zinc-400 bg-zinc-900 text-white dark:border-zinc-500 dark:bg-zinc-100 dark:text-zinc-900"
-                      : hasScopeData
-                        ? "border-zinc-200 bg-zinc-50 text-zinc-400 hover:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500"
-                        : "border-zinc-100 bg-zinc-50 text-zinc-300 cursor-not-allowed dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-600"
-                  )}
-                >
-                  {c.name}
-                  {c.isCurrent && (
-                    <span className={cn("ml-1", isActive ? "opacity-60" : "opacity-40")}>(current)</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
         {/* Cold-start warning — always visible when applicable, not gated on expand */}
-        {activeSummary.hasColdStartGap && (
+        {summary.hasColdStartGap && (
           <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
             Tracking started mid-sprint &mdash; earlier scope changes may be missing.
-            {activeSummary.issueCountAtStart !== null && (
+            {summary.issueCountAtStart !== null && (
               <>
-                {" "}Sprint started with ~{Math.round(activeSummary.issueCountAtStart)} issues, now has{" "}
-                {activeSummary.issueCountNow}.
+                {" "}Sprint started with ~{Math.round(summary.issueCountAtStart)} issues, now has{" "}
+                {summary.issueCountNow}.
               </>
             )}
           </p>
@@ -161,13 +119,13 @@ export function ScopeChangesCard({ summary, scopeChangesByCycle, cycles, current
 
         {/* Expanded content */}
         {expanded && (
-          activeSummary.changes.length === 0 ? (
+          summary.changes.length === 0 ? (
             <p className="py-4 text-center text-sm text-zinc-500">
               No scope changes detected this sprint
             </p>
           ) : (
             <div className="mt-3 space-y-2">
-              {activeSummary.changes.map((change) => (
+              {summary.changes.map((change) => (
                 <ScopeChangeRow key={`${change.issueId}-${change.changedAt}`} change={change} />
               ))}
             </div>
