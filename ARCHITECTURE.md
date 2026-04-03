@@ -103,7 +103,7 @@ src/
 │   ├── ThemeProvider.tsx                # Dark/light mode context
 │   ├── dashboard/                      # Shell, health card, narrative, metric cards, settings, onboarding (WelcomeHero, SetupBanner, WeightSliders)
 │   ├── github/                         # PR charts, review bottlenecks, stale/open lists
-│   ├── linear/                         # Velocity, workload, time-in-state (7 tabs), stalled
+│   ├── linear/                         # Velocity, workload, time-in-state (7 tabs), scope changes, stalled
 │   ├── dora/                           # Deploy frequency, lead time, incidents, history
 │   ├── slack/                          # Response time, channel activity, overload
 │   └── ui/                             # Card, Badge, Skeleton, Spinner, ErrorState, RateLimitState, RateLimitBanner, SectionHeader
@@ -117,7 +117,7 @@ src/
 │   ├── dora.ts                         # DORA metrics: deployments, incidents, correlation
 │   ├── claude.ts                       # AI provider abstraction + prompt builders
 │   ├── scoring.ts                      # Deterministic health score computation (with configurable weights)
-│   ├── db.ts                           # SQLite singleton (better-sqlite3, WAL mode)
+│   ├── db.ts                           # SQLite singleton (better-sqlite3, WAL mode) — health_snapshots + cycle_snapshots tables
 │   ├── errors.ts                       # Typed errors (RateLimitError)
 │   ├── config.ts                       # Dual config reader (env vars + JSON file)
 │   ├── utils.ts                        # Date helpers
@@ -245,6 +245,54 @@ Incidents are correlated to deployments via a **24-hour time proximity window**.
 ### Code
 
 `src/lib/dora.ts` — exports `fetchDORAMetrics(owner, repo, lookbackDays, options)`. Internally calls `fetchDeployments()`, `fetchReleases()`, `fetchIncidents()`, `correlateIncidents()`, `computeSummary()`, `computeTrend()`.
+
+---
+
+## Sprint Scope Change Tracking
+
+### Overview
+
+Tracks issues added and removed from Linear cycles mid-sprint, with actor attribution and timestamps. Only active in cycles mode — hidden in weekly/continuous flow mode. Controlled by the same cycle picker as other per-cycle sections (Workload, Stalled Issues, Time in State).
+
+### Data Sources
+
+1. **Linear IssueHistory API** — GraphQL queries on each issue's `history` for `fromCycleId`/`toCycleId` changes. Provides actor name and precise timestamp. Batched in groups of 10 via `Promise.allSettled`.
+2. **SQLite cycle snapshots** — `cycle_snapshots` table stores issue ID lists per cycle on each fetch. Diff between consecutive snapshots catches changes that IssueHistory may miss. Snapshot-sourced entries show "?" for actor (no attribution available).
+
+Changes before the cycle's `startsAt` are filtered out (sprint planning is not scope change).
+
+### Persistence
+
+`cycle_snapshots` table in `data/health.db`:
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `cycle_id` | TEXT | Linear cycle ID |
+| `cycle_name` | TEXT | Display name |
+| `issue_ids` | TEXT | JSON array of issue IDs |
+| `captured_at` | TEXT | ISO timestamp |
+| `is_baseline` | INTEGER | 1 for first snapshot of a cycle |
+
+Indexed on `(cycle_id, captured_at DESC)`. Retention: baseline + last 30 snapshots per cycle; non-baseline entries older than 90 days are purged.
+
+### Pre-caching
+
+All fetched cycles (including future/next sprints) get snapshots written on every Linear API fetch. This ensures removal tracking has a full baseline from day 1 of a new sprint.
+
+### Cold-start Detection
+
+When the earliest snapshot for a cycle postdates the cycle's `startsAt`, a warning is shown: "Tracking started mid-sprint — earlier scope changes may be missing." The `issueCountHistory` field from Linear (daily issue count array) provides gap quantification.
+
+### UI Components
+
+- **ScopeChangesCard** (`src/components/linear/ScopeChangesCard.tsx`) — collapsible card with header counts (+N added, −N removed, net ±N with amber badge when positive). Expands to chronological list with green/red +/− indicators, Linear issue links, actor names, relative timestamps, and removal destinations.
+- **Scope Change MetricCard** — in LinearSection summary row (5th card), amber "scope grew" label when net > 0, scrolls to `#scope-changes`.
+
+### Code
+
+- `src/types/linear.ts` — `ScopeChange`, `ScopeChangeSummary` interfaces; `scopeChanges` and `scopeChangesByCycle` on `LinearMetrics`
+- `src/lib/db.ts` — `writeCycleSnapshot()`, `getLatestCycleSnapshot()`, `getEarliestCycleSnapshot()`, `diffSnapshots()`
+- `src/lib/linear.ts` — `fetchScopeChanges()`, `fetchCycleHistoryForIssue()` (internal)
 
 ---
 
@@ -402,6 +450,7 @@ graph TD
 
     LN --> Velocity["VelocityChart"]
     LN --> TimeState["TimeInState (7 tabs)"]
+    LN --> ScopeCard["ScopeChangesCard (cycles only)"]
     LN --> Workload["WorkloadDistribution"]
     LN --> Stalled["StalledIssuesList"]
 
