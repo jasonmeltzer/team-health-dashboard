@@ -1,6 +1,6 @@
 # Architecture
 
-> Last updated: 2026-03-28. Update this document when making structural changes.
+> Last updated: 2026-04-03. Update this document when making structural changes.
 
 ## Overview
 
@@ -101,21 +101,22 @@ src/
 │       └── config/route.ts             # Settings read/write
 ├── components/
 │   ├── ThemeProvider.tsx                # Dark/light mode context
-│   ├── dashboard/                      # Shell, health card, narrative, metric cards, settings
+│   ├── dashboard/                      # Shell, health card, narrative, metric cards, settings, onboarding (WelcomeHero, SetupBanner, WeightSliders)
 │   ├── github/                         # PR charts, review bottlenecks, stale/open lists
 │   ├── linear/                         # Velocity, workload, time-in-state (7 tabs), stalled
 │   ├── dora/                           # Deploy frequency, lead time, incidents, history
 │   ├── slack/                          # Response time, channel activity, overload
 │   └── ui/                             # Card, Badge, Skeleton, Spinner, ErrorState, RateLimitState, RateLimitBanner, SectionHeader
 ├── hooks/
-│   └── useApiData.ts                   # Generic fetch hook (all sections use this)
+│   ├── useApiData.ts                   # Generic fetch hook (all sections use this)
+│   └── useConfigStatus.ts              # Config state detection (allUnconfigured, unconfiguredList)
 ├── lib/
 │   ├── github.ts                       # Octokit wrapper, paginated PR fetching
 │   ├── linear.ts                       # Linear GraphQL client
 │   ├── slack.ts                        # Slack Web API wrapper
 │   ├── dora.ts                         # DORA metrics: deployments, incidents, correlation
 │   ├── claude.ts                       # AI provider abstraction + prompt builders
-│   ├── scoring.ts                      # Deterministic health score computation
+│   ├── scoring.ts                      # Deterministic health score computation (with configurable weights)
 │   ├── db.ts                           # SQLite singleton (better-sqlite3, WAL mode)
 │   ├── errors.ts                       # Typed errors (RateLimitError)
 │   ├── config.ts                       # Dual config reader (env vars + JSON file)
@@ -187,8 +188,9 @@ The health score is **deterministic** — same data always produces the same sco
 
 1. Start at 100
 2. Each connected integration contributes deductions based on signal thresholds
-3. Rescale: `score = 100 - (totalDeductions / maxPossibleDeductions) * 100`
-4. Only score against connected integrations (disconnected ones don't penalize)
+3. Apply configurable weights: `SCORE_WEIGHT_{GITHUB,LINEAR,SLACK,DORA}` (0-100 slider values, converted to 0.0-1.0 multipliers). Weights scale both `totalDeductions` and `maxPossible` per category — raw per-signal values remain unweighted for display correctness.
+4. Rescale: `score = 100 - (totalDeductions / maxPossibleDeductions) * 100`
+5. Only score against connected integrations (disconnected ones don't penalize)
 
 ### Deduction Categories
 
@@ -209,7 +211,7 @@ The health score is **deterministic** — same data always produces the same sco
 
 ### Scoring File
 
-`src/lib/scoring.ts` — exports `computeHealthScore(github, linear, slack, dora)`. Each parameter is nullable; only connected sources contribute deductions. The DORA score only activates when `totalDeployments > 0`.
+`src/lib/scoring.ts` — exports `computeHealthScore(github, linear, slack, dora, weights?)`. Each parameter is nullable; only connected sources contribute deductions. The DORA score only activates when `totalDeployments > 0`. The optional `ScoreWeights` parameter applies per-category multipliers for configurable emphasis.
 
 ---
 
@@ -316,12 +318,12 @@ process.env (via .env.local)  →  takes precedence
 
 ### Settings UI
 
-Gear icon → modal with sidebar navigation (GitHub, Linear, Slack, DORA, AI sections). Each field has a `?` help popover with step-by-step instructions. Saves to `.config.local.json` (gitignored).
+Gear icon → modal with sidebar navigation (GitHub, Linear, Slack, DORA, AI, Scoring sections). Each field has a `?` help popover with step-by-step instructions. Saves to `.config.local.json` (gitignored). The Scoring section contains per-integration weight sliders with live score preview, deferred commit pattern, and two-step reset confirmation.
 
 ### Config API
 
-- `GET /api/config` — returns which integrations are configured (booleans, no secrets)
-- `POST /api/config` — saves values to `.config.local.json` (whitelisted keys only)
+- `GET /api/config` — returns which integrations are configured (booleans, no secrets), plus `scoringWeights` and `cacheTtl` maps
+- `POST /api/config` — saves values to `.config.local.json` (whitelisted keys only, including `SCORE_WEIGHT_*`)
 
 ### Code
 
@@ -381,6 +383,9 @@ graph TD
 
     Layout --> Page --> Shell
 
+    Shell --> ConfigHook["useConfigStatus"]
+    Shell --> WelcomeHero["WelcomeHero (all unconfigured)"]
+    Shell --> SetupBanner["SetupBanner (partially configured)"]
     Shell --> Health["HealthSummaryCard"]
     Shell --> Narrative["WeeklyNarrativeCard"]
     Shell --> MetricCards["MetricCard grid (clickable)"]
@@ -388,6 +393,7 @@ graph TD
     Shell --> LN["LinearSection"]
     Shell --> DORA["DORASection"]
     Shell --> SL["SlackSection"]
+    Shell --> Settings["SettingsModal (with WeightSliders)"]
 
     GH --> CycleChart["CycleTimeChart"]
     GH --> ReviewBot["ReviewBottlenecks"]
@@ -421,6 +427,28 @@ graph TD
 - **Keyboard accessibility** — all interactive non-button elements (MetricCard, table rows, heatmap cells, file upload) respond to Enter/Space with `role="button"` and `tabIndex={0}`
 - **Accessible labels** — icon-only buttons use `aria-label`; modals use `aria-labelledby` and `aria-modal="true"`
 
+### Onboarding Flow
+
+`DashboardShell` uses the `useConfigStatus` hook to detect the config state and render one of three experiences:
+
+1. **Loading** — skeleton placeholder while `/api/config` is fetched
+2. **All unconfigured** (`allUnconfigured === true`) — `WelcomeHero` card with per-integration "Connect" buttons. Each button opens `SettingsModal` pre-navigated to that integration's section via the `initialSection` prop.
+3. **Partially/fully configured** — normal dashboard with an optional `SetupBanner` listing unconfigured integrations. The banner is dismissible (persisted to `localStorage`).
+
+### Empty States
+
+Each section component handles two empty states:
+
+- **Treatment A (not configured)**: `notConfigured` from `useApiData` triggers a centered card with section icon, heading, body copy, and "Connect" button calling `onOpenSettings(section)`.
+- **Treatment B (configured, no data)**: Section header and controls remain visible; a contextual message appears in the chart area (e.g., "No pull requests merged in the last X days. Try a longer lookback period.").
+
+### Score Breakdown Interactivity
+
+The `HealthSummaryCard` score breakdown panel:
+- **Non-zero deduction rows**: clickable (`role="button"`, `cursor-pointer`), with "↗" suffix. Clicking/pressing Enter scrolls to the corresponding section via `id` attributes (`github-section`, `linear-section`, `slack-section`, `dora-section`).
+- **Zero-deduction rows**: dimmed (`opacity-50`), not interactive.
+- **`onDeductionsLoaded` callback**: passes `ScoreDeduction[]` to `DashboardShell`, which forwards them to `WeightSliders` for live score preview.
+
 ### Theme System
 
 `ThemeProvider.tsx` — React context with `useTheme()` hook. Reads/writes `localStorage`. Defaults to dark mode. Toggles the `dark` class on `<html>`. Light mode is labeled "Incorrect Mode" in the UI. The theme toggle button uses `suppressHydrationWarning` to avoid server/client mismatch (theme is read from `localStorage` on the client).
@@ -439,7 +467,7 @@ graph TD
 
 - **Framework**: Vitest
 - **Location**: `src/lib/__tests__/`
-- **Coverage**: `scoring.ts` (health score computation with mock data builders) and `utils.ts` (date helpers)
+- **Coverage**: `scoring.ts` (health score computation with mock data builders), `utils.ts` (date helpers), `empty-states.ts` (Treatment B condition logic for all four sections), `cache-ttl.ts`, `db.ts`, `manual-ai.ts`
 - **Run**: `npm test` (single pass) or `npm run test:watch` (continuous)
 
 ### CI Pipeline
