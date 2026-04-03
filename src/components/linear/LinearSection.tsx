@@ -14,6 +14,7 @@ import { VelocityChart } from "./VelocityChart";
 import { StalledIssuesList } from "./StalledIssuesList";
 import { WorkloadDistribution } from "./WorkloadDistribution";
 import { TimeInState } from "./TimeInState";
+import { ScopeChangesCard } from "./ScopeChangesCard";
 
 const LinearIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
@@ -270,7 +271,7 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
         <RevalidatingBanner source="Linear" />
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <MetricCard
           label={isCycles ? "Cycle" : "Mode"}
           value={isCycles ? activeCycleName : data.summary.currentCycleName}
@@ -320,6 +321,34 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
             refreshing={refreshing}
           />
         )}
+        {isCycles && data.scopeChanges && (
+          <MetricCard
+            label="Scope Change"
+            value={data.scopeChanges.net >= 0 ? `+${data.scopeChanges.net}` : `${data.scopeChanges.net}`}
+            trendLabel={
+              <span
+                className={cn(
+                  "text-xs",
+                  data.scopeChanges.net > 0
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-zinc-500"
+                )}
+              >
+                {data.scopeChanges.net > 0
+                  ? "scope grew"
+                  : data.scopeChanges.net < 0
+                  ? "scope reduced"
+                  : "on track"}
+              </span>
+            }
+            refreshing={refreshing}
+            onClick={() => {
+              document
+                .getElementById("scope-changes")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          />
+        )}
       </div>
 
       {hasCycles && (
@@ -364,6 +393,10 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
           />
         </div>
       </Card>
+
+      {isCycles && data.scopeChanges && (
+        <ScopeChangesCard summary={data.scopeChanges} />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
