@@ -133,7 +133,17 @@ function CyclePicker({
 
 
 export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: number; onOpenSettings?: (section: string) => void }) {
-  const [viewMode, setViewMode] = useState<ViewMode>("weekly");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("linear-view-mode");
+      if (saved === "cycles" || saved === "weekly") return saved;
+    }
+    return "weekly";
+  });
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem("linear-view-mode", mode);
+  };
   const [sliderDays, setSliderDays] = useState(42);
   const [committedDays, setCommittedDays] = useState(42);
   const [selectedCycleName, setSelectedCycleName] = useState<string | null>(null);
@@ -177,7 +187,7 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
         onChange={setSliderDays}
         onCommit={() => setCommittedDays(sliderDays)}
       />
-      <ViewToggle mode={viewMode} onChange={setViewMode} />
+      <ViewToggle mode={viewMode} onChange={handleViewModeChange} />
     </div>
   );
 
