@@ -20,6 +20,20 @@ function initSchema(db: Database.Database) {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_snapshots_date ON health_snapshots(date)
   `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cycle_snapshots (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      cycle_id    TEXT    NOT NULL,
+      cycle_name  TEXT    NOT NULL,
+      issue_ids   TEXT    NOT NULL,
+      captured_at TEXT    NOT NULL DEFAULT (datetime('now')),
+      is_baseline INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_cycle_snapshots_cycle_id
+      ON cycle_snapshots(cycle_id, captured_at DESC)
+  `);
 }
 
 export function getDb(): Database.Database {
@@ -75,4 +89,90 @@ export function getSnapshots(days: number): Array<{
     band: string;
     deductions: string;
   }>;
+}
+
+export function writeCycleSnapshot(
+  cycleId: string,
+  cycleName: string,
+  issueIds: string[]
+): void {
+  try {
+    const db = getDb();
+    const isFirst = db
+      .prepare("SELECT COUNT(*) as cnt FROM cycle_snapshots WHERE cycle_id = ?")
+      .get(cycleId) as { cnt: number };
+    const stmt = db.prepare(
+      "INSERT INTO cycle_snapshots (cycle_id, cycle_name, issue_ids, captured_at, is_baseline) VALUES (?, ?, ?, ?, ?)"
+    );
+    stmt.run(
+      cycleId,
+      cycleName,
+      JSON.stringify(issueIds),
+      new Date().toISOString(),
+      isFirst.cnt === 0 ? 1 : 0
+    );
+    // Retention: keep baseline + last 30 non-baseline snapshots per cycle
+    db.prepare(`
+      DELETE FROM cycle_snapshots
+      WHERE cycle_id = ? AND is_baseline = 0
+        AND id NOT IN (
+          SELECT id FROM cycle_snapshots
+          WHERE cycle_id = ? AND is_baseline = 0
+          ORDER BY captured_at DESC LIMIT 30
+        )
+    `).run(cycleId, cycleId);
+    // Also clean up snapshots older than 90 days (except baselines)
+    db.prepare(`
+      DELETE FROM cycle_snapshots
+      WHERE is_baseline = 0 AND captured_at < datetime('now', '-90 days')
+    `).run();
+  } catch {
+    // Non-fatal — snapshot failure must not break API response
+  }
+}
+
+export function getLatestCycleSnapshot(
+  cycleId: string
+): { issueIds: string[]; capturedAt: string } | null {
+  try {
+    const db = getDb();
+    const row = db
+      .prepare(
+        "SELECT issue_ids, captured_at FROM cycle_snapshots WHERE cycle_id = ? ORDER BY captured_at DESC LIMIT 1"
+      )
+      .get(cycleId) as { issue_ids: string; captured_at: string } | undefined;
+    if (!row) return null;
+    return { issueIds: JSON.parse(row.issue_ids), capturedAt: row.captured_at };
+  } catch {
+    return null;
+  }
+}
+
+export function getEarliestCycleSnapshot(
+  cycleId: string
+): { issueIds: string[]; capturedAt: string } | null {
+  try {
+    const db = getDb();
+    const row = db
+      .prepare(
+        "SELECT issue_ids, captured_at FROM cycle_snapshots WHERE cycle_id = ? ORDER BY captured_at ASC LIMIT 1"
+      )
+      .get(cycleId) as { issue_ids: string; captured_at: string } | undefined;
+    if (!row) return null;
+    return { issueIds: JSON.parse(row.issue_ids), capturedAt: row.captured_at };
+  } catch {
+    return null;
+  }
+}
+
+export function diffSnapshots(
+  previous: string[],
+  current: string[]
+): { added: string[]; removed: string[] } {
+  const prevSet = new Set(previous);
+  const currSet = new Set(current);
+  return {
+    added: current.filter((id) => !prevSet.has(id)),
+    removed: previous.filter((id) => !currSet.has(id)),
+  };
 }
