@@ -353,22 +353,17 @@ async function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 4
         )
       : 0;
 
-  // Find the current active cycle object for scope change tracking
-  const currentCycleObj = cycles.find(
-    (c) => new Date(c.startsAt) <= now && new Date(c.endsAt) >= now
-  );
-
-  // Compute scope changes for the current cycle
+  // Compute scope changes for the current cycle (reuse currentCycle which has fallback logic)
   let scopeChanges: ScopeChangeSummary | null = null;
-  if (currentCycleObj) {
-    const issueMap = new Map(currentCycleObj.issues.nodes.map((i) => [i.id, i]));
-    const allIssueIds = currentCycleObj.issues.nodes.map((i) => i.id);
-    scopeChanges = await fetchScopeChanges(currentCycleObj, allIssueIds, issueMap);
+  if (currentCycle) {
+    const issueMap = new Map(currentCycle.issues.nodes.map((i) => [i.id, i]));
+    const allIssueIds = currentCycle.issues.nodes.map((i) => i.id);
+    scopeChanges = await fetchScopeChanges(currentCycle, allIssueIds, issueMap);
   }
 
   // Silent snapshot writes for non-current cycles (previous and next sprint baselines, D-15)
   for (const cycle of cycles) {
-    if (cycle === currentCycleObj) continue; // already handled inside fetchScopeChanges
+    if (cycle === currentCycle) continue; // already handled inside fetchScopeChanges
     try {
       const ids = cycle.issues.nodes.map((i) => i.id);
       writeCycleSnapshot(cycle.id, cycle.name || `Cycle ${cycle.number}`, ids);
