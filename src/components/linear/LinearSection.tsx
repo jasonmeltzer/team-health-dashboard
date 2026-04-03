@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useApiData } from "@/hooks/useApiData";
 import type { LinearMetrics, CycleInfo } from "@/types/linear";
 import { Card } from "@/components/ui/Card";
@@ -133,13 +133,11 @@ function CyclePicker({
 
 
 export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: number; onOpenSettings?: (section: string) => void }) {
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("linear-view-mode");
-      if (saved === "cycles" || saved === "weekly") return saved;
-    }
-    return "weekly";
-  });
+  const [viewMode, setViewMode] = useState<ViewMode>("weekly");
+  useEffect(() => {
+    const saved = localStorage.getItem("linear-view-mode");
+    if (saved === "cycles" || saved === "weekly") setViewMode(saved);
+  }, []);
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
     localStorage.setItem("linear-view-mode", mode);
