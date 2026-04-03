@@ -37,7 +37,7 @@ const LOOKBACK_OPTIONS = [
   { label: "90d", days: 90 },
 ];
 
-export function GitHubSection({ refreshKey }: { refreshKey: number }) {
+export function GitHubSection({ refreshKey, onOpenSettings }: { refreshKey: number; onOpenSettings?: (section: string) => void }) {
   const [staleDays, setStaleDays] = useState(7);
   const [lookbackDays, setLookbackDays] = useState(30);
   const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, stale, revalidating, rateLimited, rateLimitReset, refetch } = useApiData<PRMetrics>(
@@ -48,13 +48,23 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
   if (notConfigured) {
     return (
       <Card>
-        <SectionHeader title="GitHub" icon={<GitHubIcon />} />
-        <p className="text-sm text-zinc-500">
-          PR cycle time, review bottlenecks, and stale PR tracking.
-        </p>
-        <p className="mt-2 text-xs text-zinc-400">
-          Add your GitHub token, org, and repo in Settings to enable.
-        </p>
+        <div id="github-section" className="min-h-[200px] flex flex-col items-center justify-center text-center px-4">
+          <SectionHeader title="GitHub" icon={<GitHubIcon />} />
+          <p className="mt-4 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            GitHub not connected
+          </p>
+          <p className="mt-1 text-sm font-normal text-zinc-600 dark:text-zinc-400 max-w-md">
+            PR cycle time, review bottlenecks, and stale PR tracking appear here. Add your token, org, and repo in Settings.
+          </p>
+          {onOpenSettings && (
+            <button
+              onClick={() => onOpenSettings("github")}
+              className="mt-4 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-normal text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Connect GitHub
+            </button>
+          )}
+        </div>
       </Card>
     );
   }
@@ -140,8 +150,11 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
 
   if (!data) return null;
 
+  // Treatment B: configured but no merged PRs in lookback window
+  const noMergedPRs = data.cycleTimeTrend.length === 0 || data.cycleTimeTrend.every((w) => w.prsMerged === 0);
+
   return (
-    <div className="space-y-4">
+    <div id="github-section" className="space-y-4">
       <SectionHeader title="GitHub" icon={<GitHubIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
       {rateLimited && (
         <RateLimitBanner
@@ -188,10 +201,16 @@ export function GitHubSection({ refreshKey }: { refreshKey: number }) {
       </div>
 
       <Card>
-        <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
           Cycle Time Trend
         </h3>
-        <CycleTimeChart data={data.cycleTimeTrend} />
+        {noMergedPRs ? (
+          <p className="py-8 text-center text-sm font-normal text-zinc-500">
+            No pull requests merged in the last {lookbackDays} days. Try a longer lookback period.
+          </p>
+        ) : (
+          <CycleTimeChart data={data.cycleTimeTrend} />
+        )}
       </Card>
 
       <Card>

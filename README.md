@@ -47,6 +47,10 @@ On top of the deterministic score, an optional AI layer (Claude or a local Ollam
 - **Cycles / Weekly toggle**: supports both cycle-based sprints and continuous flow, switchable in the UI
 - **Slack communication metrics**: response times, channel activity, overload detection
 - **Weekly AI narrative**: a prose team health summary generated from all connected data
+- **Configurable scoring weights**: per-integration weight sliders (GitHub, Linear, Slack, DORA) with live score preview in the Settings UI
+- **Score breakdown click-to-scroll**: clickable deduction rows scroll to the relevant section; zero-deduction rows are dimmed
+- **First-run onboarding**: Welcome Hero card when no integrations are configured; dismissible Setup Banner when partially configured
+- **Rich empty states**: unconfigured sections show "Connect" buttons that open Settings pre-navigated; configured-but-empty sections show contextual guidance
 - **Dark mode** (default) and light mode ("Incorrect Mode") with smooth toggle
 - **Data freshness timestamps** on every section
 - **Rate limit detection** for GitHub, Linear, and Slack — serves stale cached data with amber banners and countdown timers
@@ -164,21 +168,22 @@ src/
 │       └── config/route.ts             # Settings read/write
 ├── components/
 │   ├── ThemeProvider.tsx                # Dark/light mode context
-│   ├── dashboard/                      # Shell, health card, narrative, metric cards, settings
+│   ├── dashboard/                      # Shell, health card, narrative, metric cards, settings, onboarding (WelcomeHero, SetupBanner, WeightSliders)
 │   ├── github/                         # PR charts, review bottlenecks, stale/open lists
 │   ├── linear/                         # Velocity, workload, time-in-state (7 tabs), stalled
 │   ├── dora/                           # Deploy frequency, lead time, incidents, history
 │   ├── slack/                          # Response time, channel activity, overload
 │   └── ui/                             # Card, Badge, Skeleton, Spinner, ErrorState, RateLimitState, RateLimitBanner
 ├── hooks/
-│   └── useApiData.ts                   # Generic data fetching hook
+│   ├── useApiData.ts                   # Generic data fetching hook
+│   └── useConfigStatus.ts              # Config state detection (allUnconfigured, unconfiguredList)
 ├── lib/
 │   ├── github.ts                       # GitHub API client (Octokit, paginated)
 │   ├── linear.ts                       # Linear GraphQL client
 │   ├── slack.ts                        # Slack API client
 │   ├── dora.ts                         # DORA metrics (deployments, incidents, correlation)
 │   ├── claude.ts                       # AI provider abstraction (Ollama, Anthropic, or Manual)
-│   ├── scoring.ts                      # Deterministic health score computation
+│   ├── scoring.ts                      # Deterministic health score computation (with configurable weights)
 │   ├── db.ts                           # SQLite singleton (better-sqlite3, WAL mode)
 │   ├── errors.ts                       # Typed errors (RateLimitError)
 │   ├── config.ts                       # Dual config reader (env vars + .config.local.json)
@@ -194,7 +199,8 @@ src/
 - **Client-side data fetching**: each dashboard section loads independently, so slower sources (Slack, Claude) don't block the page.
 - **Pluggable AI**: defaults to Ollama (free, local). Anthropic/Claude is available for higher quality with richer prompts. Manual mode lets you use any AI chat (ChatGPT, Claude, Gemini) with no API key — download a prompt file, upload it to any AI, then drag-and-drop the AI's response file back into the dashboard.
 - **Two config paths**: settings UI for quick setup, env vars for deployment. Env vars always take precedence.
-- **Graceful degradation**: each integration is optional. Unconfigured sections show helpful placeholders. The AI summary works with whatever data sources are configured.
+- **Graceful degradation**: each integration is optional. Unconfigured sections show rich empty states with "Connect" buttons. The AI summary works with whatever data sources are configured.
+- **Onboarding flow**: first-run Welcome Hero guides users through connecting integrations. Partially-configured dashboards show a dismissible Setup Banner listing what's missing.
 
 ## Deploy
 
@@ -216,6 +222,8 @@ Contributions welcome! See [ARCHITECTURE.md](ARCHITECTURE.md) for system interna
 - **Notifications** — alert when the health score drops to Warning or Critical
 - **Slack team filtering** — track only specified team members, not all channel participants
 - ~~**Accessibility** — ARIA labels, keyboard navigation, screen reader support~~ *(done — focus traps, keyboard nav, aria-labels added in Phase 01.1)*
+- ~~**Onboarding** — first-run experience with guided setup~~ *(done in Phase 03)*
+- ~~**Scoring transparency** — clickable score breakdown, configurable weights~~ *(done in Phase 03)*
 
 ## License
 

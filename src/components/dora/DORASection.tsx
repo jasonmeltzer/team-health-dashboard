@@ -32,7 +32,7 @@ const LOOKBACK_OPTIONS = [
   { label: "90d", days: 90 },
 ];
 
-export function DORASection({ refreshKey }: { refreshKey: number }) {
+export function DORASection({ refreshKey, onOpenSettings }: { refreshKey: number; onOpenSettings?: (section: string) => void }) {
   const [lookbackDays, setLookbackDays] = useState(30);
   const [deployFilter, setDeployFilter] = useState<DeployFilter>(null);
   const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, revalidating, rateLimited, rateLimitReset, refetch } =
@@ -44,13 +44,23 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
   if (notConfigured) {
     return (
       <Card>
-        <SectionHeader title="DORA Metrics" icon={<DORAIcon />} />
-        <p className="text-sm text-zinc-500">
-          Deployment frequency, lead time, change failure rate, and MTTR.
-        </p>
-        <p className="mt-2 text-xs text-zinc-400">
-          Configure GitHub (token, org, repo) in Settings to enable DORA metrics.
-        </p>
+        <div id="dora-section" className="min-h-[200px] flex flex-col items-center justify-center text-center px-4">
+          <SectionHeader title="DORA Metrics" icon={<DORAIcon />} />
+          <p className="mt-4 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            DORA metrics need GitHub
+          </p>
+          <p className="mt-1 text-sm font-normal text-zinc-600 dark:text-zinc-400 max-w-md">
+            Deployment frequency, change failure rate, and MTTR appear here. Connect GitHub first — DORA uses your repository data.
+          </p>
+          {onOpenSettings && (
+            <button
+              onClick={() => onOpenSettings("github")}
+              className="mt-4 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-normal text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Connect GitHub
+            </button>
+          )}
+        </div>
       </Card>
     );
   }
@@ -114,28 +124,13 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
 
   if (!data) return null;
 
-  // Empty state: GitHub configured but no deployments found
-  if (data.summary.totalDeployments === 0 && data.incidents.length === 0) {
-    return (
-      <div className="space-y-4">
-        <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
-        <Card>
-          <p className="text-sm text-zinc-500">
-            No deployments, releases, or merged PRs found in the last {lookbackDays} days.
-          </p>
-          <p className="mt-2 text-xs text-zinc-400">
-            DORA metrics detect GitHub Deployments, Releases, or merged PRs to the default branch.
-            Set the deployment source to &quot;merges&quot; in Settings if your team deploys on merge.
-          </p>
-        </Card>
-      </div>
-    );
-  }
+  // Treatment B: GitHub configured but no deployments found
+  const noDeployments = data.summary.totalDeployments === 0 && data.incidents.length === 0;
 
   const s = data.summary;
 
   return (
-    <div className="space-y-4">
+    <div id="dora-section" className="space-y-4">
       <SectionHeader title="DORA Metrics" icon={<DORAIcon />} action={controls} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
       {rateLimited && (
         <RateLimitBanner
@@ -191,13 +186,23 @@ export function DORASection({ refreshKey }: { refreshKey: number }) {
         />
       </div>
 
-      <DeploymentFrequencyChart data={data.trend} filter={deployFilter} onBarClick={setDeployFilter} />
-      <LeadTimeTrend data={data.trend} />
+      {noDeployments ? (
+        <Card>
+          <p className="py-8 text-center text-sm font-normal text-zinc-500">
+            No deployments detected in the last {lookbackDays} days. Check your deployment source setting.
+          </p>
+        </Card>
+      ) : (
+        <>
+          <DeploymentFrequencyChart data={data.trend} filter={deployFilter} onBarClick={setDeployFilter} />
+          <LeadTimeTrend data={data.trend} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DeploymentHistory deployments={data.deployments} filter={deployFilter} onClearFilter={() => setDeployFilter(null)} />
-        <IncidentsList incidents={data.incidents} />
-      </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <DeploymentHistory deployments={data.deployments} filter={deployFilter} onClearFilter={() => setDeployFilter(null)} />
+            <IncidentsList incidents={data.incidents} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

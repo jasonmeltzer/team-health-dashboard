@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { WeightSliders } from "./WeightSliders";
+import type { ScoreDeduction } from "@/types/metrics";
 
 interface ConfigStatus {
   github: boolean;
@@ -15,9 +17,11 @@ interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
+  initialSection?: Section;
+  deductions?: ScoreDeduction[] | null;
 }
 
-type Section = "github" | "linear" | "slack" | "dora" | "ai" | "cache";
+type Section = "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring";
 
 const SECTIONS: { key: Section; label: string; description: string }[] = [
   { key: "github", label: "GitHub", description: "PR metrics, cycle time, review bottlenecks" },
@@ -26,9 +30,10 @@ const SECTIONS: { key: Section; label: string; description: string }[] = [
   { key: "slack", label: "Slack", description: "Response times, channel activity, overload" },
   { key: "ai", label: "AI Analysis", description: "Health summary and weekly narrative" },
   { key: "cache", label: "Cache", description: "Per-integration refresh intervals" },
+  { key: "scoring", label: "Scoring", description: "Integration weight adjustments" },
 ];
 
-export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
+export function SettingsModal({ open, onClose, onSaved, initialSection = "github", deductions }: SettingsModalProps) {
   const [status, setStatus] = useState<ConfigStatus | null>(null);
   const [activeSection, setActiveSection] = useState<Section>("github");
   const [saving, setSaving] = useState(false);
@@ -41,6 +46,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
   const [doraSettings, setDoraSettings] = useState({ source: "auto", environment: "production", incidentLabels: "incident,hotfix,production-bug" });
   const [ai, setAi] = useState({ provider: "ollama", anthropicKey: "", ollamaUrl: "", ollamaModel: "" });
   const [cacheTtl, setCacheTtl] = useState({ github: "", linear: "", slack: "", dora: "", healthSummary: "", weeklyNarrative: "" });
+  const [scoringWeights, setScoringWeights] = useState({ github: "", linear: "", slack: "", dora: "" });
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -56,6 +62,9 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
         if (json.data.cacheTtl) {
           setCacheTtl(json.data.cacheTtl);
         }
+        if (json.data.scoringWeights) {
+          setScoringWeights(json.data.scoringWeights);
+        }
       }
     } catch {
       // ignore
@@ -68,10 +77,11 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
     if (open) {
       fetchStatus();
       setMessage(null);
+      setActiveSection(initialSection);
       // Focus the dialog on open so Escape works immediately
       requestAnimationFrame(() => dialogRef.current?.focus());
     }
-  }, [open, fetchStatus]);
+  }, [open, fetchStatus, initialSection]);
 
   useEffect(() => {
     if (!open) return;
@@ -189,7 +199,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                 className={cn(
                   "flex w-full items-center gap-2 px-4 py-2 text-left text-sm transition-colors",
                   activeSection === section.key
-                    ? "bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                    ? "bg-zinc-100 font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
                     : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800/50"
                 )}
               >
@@ -402,24 +412,42 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
               />
             )}
 
+            {activeSection === "scoring" && (
+              <WeightSliders
+                configStatus={status}
+                deductions={deductions ?? null}
+                initialWeights={scoringWeights}
+                onSave={async (weights) => {
+                  const res = await fetch("/api/config", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(weights),
+                  });
+                  if (!res.ok) throw new Error("Save failed");
+                  onSaved();
+                }}
+                onOpenSection={(section) => setActiveSection(section as Section)}
+              />
+            )}
+
             {activeSection === "ai" && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                     AI Analysis
                   </h3>
                   <p className="mt-1 text-xs text-zinc-500">
                     Powers health summaries and weekly narratives. Use Ollama for free local inference, Anthropic for Claude API, or Manual to use any AI chat.
                   </p>
                   {status?.ai && (
-                    <span className="mt-2 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+                    <span className="mt-2 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-normal text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
                       Configured
                     </span>
                   )}
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="mb-1 block text-xs font-normal text-zinc-700 dark:text-zinc-300">
                     Provider
                   </label>
                   <div className="flex flex-wrap gap-2">
@@ -428,7 +456,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                         key={p}
                         onClick={() => setAi((s) => ({ ...s, provider: p }))}
                         className={cn(
-                          "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                          "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
                           ai.provider === p
                             ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
                             : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
@@ -474,7 +502,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
 
                 {ai.provider === "manual" && (
                   <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400">
-                    <p className="mb-2 font-medium text-zinc-700 dark:text-zinc-300">How manual mode works</p>
+                    <p className="mb-2 font-semibold text-zinc-700 dark:text-zinc-300">How manual mode works</p>
                     <ol className="list-inside list-decimal space-y-1">
                       <li>The dashboard generates a prompt file with your metrics data</li>
                       <li>Download the file and paste it into any AI chat (ChatGPT, Claude, Gemini, etc.)</li>
@@ -487,7 +515,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                 <button
                   onClick={saveAi}
                   disabled={saving}
-                  className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                  className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
                 >
                   {saving ? "Saving..." : "Save"}
                 </button>
@@ -520,7 +548,7 @@ function HelpPopover({ content }: { content: string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-bold leading-none text-zinc-500 hover:bg-zinc-300 hover:text-zinc-700 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600 dark:hover:text-zinc-200"
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold leading-none text-zinc-500 hover:bg-zinc-300 hover:text-zinc-700 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600 dark:hover:text-zinc-200"
       >
         ?
       </button>
@@ -556,7 +584,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="mb-1 flex items-center text-xs font-medium text-zinc-700 dark:text-zinc-300">
+      <label className="mb-1 flex items-center text-xs font-normal text-zinc-700 dark:text-zinc-300">
         {label}
         {help && <HelpPopover content={help} />}
       </label>
@@ -590,12 +618,12 @@ function SectionForm({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           {title}
         </h3>
         <p className="mt-1 text-xs text-zinc-500">{description}</p>
         {configured && (
-          <span className="mt-2 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+          <span className="mt-2 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-normal text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
             Configured
           </span>
         )}
@@ -612,7 +640,7 @@ function SectionForm({
       <button
         onClick={onSave}
         disabled={saving}
-        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
       >
         {saving ? "Saving..." : "Save"}
       </button>

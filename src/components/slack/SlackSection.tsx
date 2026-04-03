@@ -18,7 +18,7 @@ const SlackIcon = () => (
   </svg>
 );
 
-export function SlackSection({ refreshKey }: { refreshKey: number }) {
+export function SlackSection({ refreshKey, onOpenSettings }: { refreshKey: number; onOpenSettings?: (section: string) => void }) {
   const { data, loading, refreshing, error, notConfigured, fetchedAt, cached, revalidating, rateLimited, rateLimitReset, refetch } = useApiData<SlackMetrics>(
     "/api/slack",
     refreshKey
@@ -27,13 +27,23 @@ export function SlackSection({ refreshKey }: { refreshKey: number }) {
   if (notConfigured) {
     return (
       <Card>
-        <SectionHeader title="Slack" icon={<SlackIcon />} />
-        <p className="text-sm text-zinc-500">
-          Response times, channel activity, and team overload indicators.
-        </p>
-        <p className="mt-2 text-xs text-zinc-400">
-          Add your Slack bot token and channel IDs in Settings to enable.
-        </p>
+        <div id="slack-section" className="min-h-[200px] flex flex-col items-center justify-center text-center px-4">
+          <SectionHeader title="Slack" icon={<SlackIcon />} />
+          <p className="mt-4 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            Slack not connected
+          </p>
+          <p className="mt-1 text-sm font-normal text-zinc-600 dark:text-zinc-400 max-w-md">
+            Response times, channel activity, and overload indicators appear here. Add your bot token and channel IDs in Settings.
+          </p>
+          {onOpenSettings && (
+            <button
+              onClick={() => onOpenSettings("slack")}
+              className="mt-4 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-normal text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Connect Slack
+            </button>
+          )}
+        </div>
       </Card>
     );
   }
@@ -91,8 +101,11 @@ export function SlackSection({ refreshKey }: { refreshKey: number }) {
 
   if (!data) return null;
 
+  // Treatment B: configured but no channel activity found
+  const noChannelActivity = data.summary.totalMessages7Days === 0 && data.channelActivity.length === 0;
+
   return (
-    <div className="space-y-4">
+    <div id="slack-section" className="space-y-4">
       <SectionHeader title="Slack" icon={<SlackIcon />} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
       {rateLimited && (
         <RateLimitBanner
@@ -130,10 +143,16 @@ export function SlackSection({ refreshKey }: { refreshKey: number }) {
       </div>
 
       <Card>
-        <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
           Response Time Trend
         </h3>
-        <ResponseTimeChart data={data.responseTimeTrend} />
+        {noChannelActivity ? (
+          <p className="py-8 text-center text-sm font-normal text-zinc-500">
+            No channel activity found. Verify the bot has been invited to the configured channels.
+          </p>
+        ) : (
+          <ResponseTimeChart data={data.responseTimeTrend} />
+        )}
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">

@@ -55,7 +55,7 @@ export function getConfigStatus(): Record<string, boolean | string | Record<stri
     github: githubConfigured,
     linear: !!(getConfig("LINEAR_API_KEY") && getConfig("LINEAR_TEAM_ID")),
     slack: !!(getConfig("SLACK_BOT_TOKEN") && getConfig("SLACK_CHANNEL_IDS")),
-    ai: aiProvider === "manual" || !!(getConfig("ANTHROPIC_API_KEY") || aiProvider === "ollama"),
+    ai: aiProvider === "manual" || !!getConfig("ANTHROPIC_API_KEY") || (aiProvider === "ollama" && !!getConfig("AI_PROVIDER")),
     aiProvider,
     dora: githubConfigured,
     cacheTtl: {
@@ -65,6 +65,12 @@ export function getConfigStatus(): Record<string, boolean | string | Record<stri
       dora: getConfig("CACHE_TTL_DORA") || "",
       healthSummary: getConfig("CACHE_TTL_HEALTH_SUMMARY") || "",
       weeklyNarrative: getConfig("CACHE_TTL_WEEKLY_NARRATIVE") || "",
+    },
+    scoringWeights: {
+      github: getConfig("SCORE_WEIGHT_GITHUB") || "",
+      linear: getConfig("SCORE_WEIGHT_LINEAR") || "",
+      slack: getConfig("SCORE_WEIGHT_SLACK") || "",
+      dora: getConfig("SCORE_WEIGHT_DORA") || "",
     },
   };
 }
