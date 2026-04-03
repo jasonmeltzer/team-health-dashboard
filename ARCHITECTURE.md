@@ -423,7 +423,7 @@ graph TD
 - **Stale-while-revalidate** — during refetch, existing data stays visible with a pulsing animation
 - **Per-section refresh** — each section has its own refresh button; hidden during rate limit states
 - **AbortController cleanup** — `useApiData` aborts in-flight fetches on unmount/URL change to prevent memory leaks
-- **Modal focus traps** — `focus-trap-react` wraps Settings and ManualAI modals; focus cycles within the modal
+- **Modal focus traps** — `@radix-ui/react-dialog` wraps Settings and ManualAI modals; provides focus trapping, ARIA roles, and keyboard dismissal
 - **Keyboard accessibility** — all interactive non-button elements (MetricCard, table rows, heatmap cells, file upload) respond to Enter/Space with `role="button"` and `tabIndex={0}`
 - **Accessible labels** — icon-only buttons use `aria-label`; modals use `aria-labelledby` and `aria-modal="true"`
 

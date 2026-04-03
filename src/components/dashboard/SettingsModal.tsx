@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import { WeightSliders } from "./WeightSliders";
 import type { ScoreDeduction } from "@/types/metrics";
@@ -71,28 +72,13 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
     }
   }, []);
 
-  const dialogRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     if (open) {
       fetchStatus();
       setMessage(null);
       setActiveSection(initialSection);
-      // Focus the dialog on open so Escape works immediately
-      requestAnimationFrame(() => dialogRef.current?.focus());
     }
   }, [open, fetchStatus, initialSection]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
-
-  if (!open) return null;
 
   const handleSave = async (values: Record<string, string>) => {
     setSaving(true);
@@ -162,28 +148,21 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
     });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-modal-title"
-        tabIndex={-1}
-        className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-zinc-200 bg-white shadow-xl outline-none dark:border-zinc-700 dark:bg-zinc-900"
-      >
+    <Dialog.Root open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+        <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-zinc-200 bg-white shadow-xl outline-none dark:border-zinc-700 dark:bg-zinc-900">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-700">
-          <h2 id="settings-modal-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          <Dialog.Title className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Settings
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-          >
+          </Dialog.Title>
+          <Dialog.Close className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M15 5L5 15M5 5l10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
-          </button>
+          </Dialog.Close>
         </div>
 
         <div className="flex min-h-0 flex-1">
@@ -523,8 +502,10 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
             )}
           </div>
         </div>
-      </div>
-    </div>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
