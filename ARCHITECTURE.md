@@ -432,8 +432,8 @@ graph TD
 `DashboardShell` uses the `useConfigStatus` hook to detect the config state and render one of three experiences:
 
 1. **Loading** — skeleton placeholder while `/api/config` is fetched
-2. **All unconfigured** (`allUnconfigured === true`) — `WelcomeHero` card with per-integration "Connect" buttons. Each button opens `SettingsModal` pre-navigated to that integration's section via the `initialSection` prop.
-3. **Partially/fully configured** — normal dashboard with an optional `SetupBanner` listing unconfigured integrations. The banner is dismissible (persisted to `localStorage`).
+2. **All unconfigured** (`allUnconfigured === true`) — `WelcomeHero` card with per-integration "Connect" buttons. Each button opens `SettingsModal` pre-navigated to that integration's section via the `initialSection` prop. Data sections and weekly narrative are hidden in this state.
+3. **Partially/fully configured** — normal dashboard with an optional `SetupBanner` (`role="status"`, `aria-live="polite"`) listing unconfigured integrations. "Connect now" navigates to the first unconfigured section. The banner is dismissible (persisted to `localStorage`).
 
 ### Empty States
 
