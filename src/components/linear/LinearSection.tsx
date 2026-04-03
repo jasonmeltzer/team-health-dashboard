@@ -403,7 +403,12 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
       </Card>
 
       {isCycles && data.scopeChanges && (
-        <ScopeChangesCard summary={data.scopeChanges} />
+        <ScopeChangesCard
+          summary={data.scopeChanges}
+          scopeChangesByCycle={data.scopeChangesByCycle}
+          cycles={data.availableCycles}
+          currentCycleName={data.summary.currentCycleName}
+        />
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">

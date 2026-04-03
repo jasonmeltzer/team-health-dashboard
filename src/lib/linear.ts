@@ -355,22 +355,21 @@ async function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 4
         )
       : 0;
 
-  // Compute scope changes for the current cycle (reuse currentCycle which has fallback logic)
+  // Compute scope changes for all cycles (current + past)
   let scopeChanges: ScopeChangeSummary | null = null;
-  if (currentCycle) {
-    const issueMap = new Map(currentCycle.issues.nodes.map((i) => [i.id, i]));
-    const allIssueIds = currentCycle.issues.nodes.map((i) => i.id);
-    scopeChanges = await fetchScopeChanges(currentCycle, allIssueIds, issueMap);
-  }
-
-  // Silent snapshot writes for non-current cycles (previous and next sprint baselines, D-15)
+  const scopeChangesByCycle: Record<string, ScopeChangeSummary> = {};
   for (const cycle of cycles) {
-    if (cycle === currentCycle) continue; // already handled inside fetchScopeChanges
     try {
-      const ids = cycle.issues.nodes.map((i) => i.id);
-      writeCycleSnapshot(cycle.id, cycle.name || `Cycle ${cycle.number}`, ids);
+      const issueMap = new Map(cycle.issues.nodes.map((i) => [i.id, i]));
+      const allIssueIds = cycle.issues.nodes.map((i) => i.id);
+      const cycleName = cycle.name || `Cycle ${cycle.number}`;
+      const summary = await fetchScopeChanges(cycle, allIssueIds, issueMap);
+      scopeChangesByCycle[cycleName] = summary;
+      if (cycle === currentCycle) {
+        scopeChanges = summary;
+      }
     } catch {
-      // Non-fatal
+      // Non-fatal — snapshot write still happens inside fetchScopeChanges
     }
   }
 
@@ -393,6 +392,7 @@ async function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 4
       avgVelocity,
     },
     scopeChanges,
+    scopeChangesByCycle,
   };
 }
 

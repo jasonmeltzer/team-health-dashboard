@@ -123,4 +123,5 @@ export interface LinearMetrics {
     avgVelocity: number;
   };
   scopeChanges?: ScopeChangeSummary | null;
+  scopeChangesByCycle?: Record<string, ScopeChangeSummary>;
 }
