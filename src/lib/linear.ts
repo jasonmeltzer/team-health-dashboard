@@ -1,7 +1,8 @@
-import type { LinearMetrics, VelocityDataPoint, StalledIssue, WorkloadEntry, TimeInStateStats, TimeInStateData, TimeInStateIssue, LeadTimeTrendPoint, CycleSummary } from "@/types/linear";
+import type { LinearMetrics, VelocityDataPoint, StalledIssue, WorkloadEntry, TimeInStateStats, TimeInStateData, TimeInStateIssue, LeadTimeTrendPoint, CycleSummary, ScopeChange, ScopeChangeSummary } from "@/types/linear";
 import { daysBetween } from "@/lib/utils";
 import { getConfig } from "@/lib/config";
 import { RateLimitError } from "@/lib/errors";
+import { writeCycleSnapshot, getLatestCycleSnapshot, getEarliestCycleSnapshot, diffSnapshots } from "@/lib/db";
 
 const LINEAR_API = "https://api.linear.app/graphql";
 
@@ -55,7 +56,19 @@ interface LinearCycle {
   startsAt: string;
   endsAt: string;
   progress: number;
+  issueCountHistory: number[];
   issues: { nodes: LinearIssue[] };
+}
+
+interface CycleHistoryEntry {
+  id: string;
+  createdAt: string;
+  actorId: string | null;
+  actor: { id: string; name: string } | null;
+  fromCycleId: string | null;
+  toCycleId: string | null;
+  toCycle: { id: string; name: string | null; number: number } | null;
+  fromCycle: { id: string; name: string | null; number: number } | null;
 }
 
 export async function fetchLinearMetrics(
@@ -77,6 +90,7 @@ export async function fetchLinearMetrics(
         cycles(first: 6, orderBy: createdAt) {
           nodes {
             id name number startsAt endsAt progress
+            issueCountHistory
             issues {
               nodes {
                 id identifier title
@@ -100,13 +114,172 @@ export async function fetchLinearMetrics(
   // If mode is explicitly "cycles", use cycles even if empty
   // If mode is auto (undefined), detect based on data
   if (mode === "cycles" || cycles.length > 0) {
-    return buildCycleMetrics(cycles, lookbackDays);
+    return await buildCycleMetrics(cycles, lookbackDays);
   } else {
     return buildContinuousMetrics(teamId, lookbackDays);
   }
 }
 
-function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 42): LinearMetrics {
+async function fetchCycleHistoryForIssue(
+  issueId: string,
+  cycleId: string
+): Promise<CycleHistoryEntry[]> {
+  try {
+    const data = await linearQuery<{
+      issue: {
+        history: {
+          nodes: CycleHistoryEntry[];
+        };
+      };
+    }>(
+      `query($issueId: String!) {
+        issue(id: $issueId) {
+          history(first: 50, orderBy: createdAt) {
+            nodes {
+              id createdAt actorId
+              actor { id name }
+              fromCycleId toCycleId
+              toCycle { id name number }
+              fromCycle { id name number }
+            }
+          }
+        }
+      }`,
+      { issueId }
+    );
+    // Filter to entries relevant to this cycle
+    return data.issue.history.nodes.filter(
+      (n) => n.fromCycleId === cycleId || n.toCycleId === cycleId
+    );
+  } catch {
+    return []; // Non-fatal — degrade to snapshot-only
+  }
+}
+
+export async function fetchScopeChanges(
+  currentCycle: LinearCycle,
+  allIssueIds: string[],
+  issueMap: Map<string, LinearIssue>
+): Promise<ScopeChangeSummary> {
+  // Get previous snapshot before writing the new one
+  const prevSnapshot = getLatestCycleSnapshot(currentCycle.id);
+
+  // Write current snapshot
+  writeCycleSnapshot(
+    currentCycle.id,
+    currentCycle.name || `Cycle ${currentCycle.number}`,
+    allIssueIds
+  );
+
+  // Compute snapshot diff (if previous snapshot exists)
+  const diff = prevSnapshot
+    ? diffSnapshots(prevSnapshot.issueIds, allIssueIds)
+    : { added: [], removed: [] };
+
+  // Fetch IssueHistory for all relevant issues (current + removed from diff).
+  // Note: Linear history retention is not documented; treat as best-effort.
+  // Batch in groups of 10 to avoid rate limits (conservative per RESEARCH.md).
+  // Track which issueId produced which history entries via batch index.
+  const issueIdsToQuery = [...new Set([...allIssueIds, ...diff.removed])];
+  const historyChangesByIssue: ScopeChange[] = [];
+  for (let i = 0; i < issueIdsToQuery.length; i += 10) {
+    const batch = issueIdsToQuery.slice(i, i + 10);
+    const results = await Promise.allSettled(
+      batch.map((id) => fetchCycleHistoryForIssue(id, currentCycle.id))
+    );
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
+      if (result.status !== "fulfilled") continue;
+      const issId = batch[j];
+      const issue = issueMap.get(issId);
+      for (const entry of result.value) {
+        const isAdded = entry.toCycleId === currentCycle.id;
+        const type: "added" | "removed" = isAdded ? "added" : "removed";
+        const actor =
+          entry.actor?.name ?? (entry.actorId ? "Unknown" : "Automation");
+        // For removals, show destination cycle name or "backlog" if moved to no cycle.
+        // toCycleId === null means moved to backlog (Pitfall 6 from RESEARCH.md)
+        const destination = !isAdded
+          ? (entry.toCycle?.name ?? (entry.toCycleId === null ? "backlog" : null))
+          : null;
+        historyChangesByIssue.push({
+          issueId: issId,
+          identifier: issue?.identifier ?? issId,
+          title: issue?.title ?? "Unknown issue",
+          url: issue?.url ?? "",
+          type,
+          actor,
+          changedAt: entry.createdAt,
+          destination,
+          source: "history",
+        });
+      }
+    }
+  }
+
+  const changes: ScopeChange[] = [...historyChangesByIssue];
+
+  // Merge snapshot-diff entries for issues not already covered by Linear history.
+  // Snapshot entries have no actor attribution — shown as null ("?") in the UI.
+  const historyCoveredIds = new Set(
+    historyChangesByIssue.map((c) => `${c.type}:${c.issueId}`)
+  );
+
+  if (prevSnapshot) {
+    for (const id of diff.added) {
+      if (historyCoveredIds.has(`added:${id}`)) continue;
+      const issue = issueMap.get(id);
+      changes.push({
+        issueId: id,
+        identifier: issue?.identifier ?? id,
+        title: issue?.title ?? "Unknown issue",
+        url: issue?.url ?? "",
+        type: "added",
+        actor: null,
+        changedAt: prevSnapshot.capturedAt,
+        destination: null,
+        source: "snapshot",
+      });
+    }
+    for (const id of diff.removed) {
+      if (historyCoveredIds.has(`removed:${id}`)) continue;
+      changes.push({
+        issueId: id,
+        identifier: id,
+        title: "Unknown issue",
+        url: "",
+        type: "removed",
+        actor: null,
+        changedAt: prevSnapshot.capturedAt,
+        destination: null,
+        source: "snapshot",
+      });
+    }
+  }
+
+  // Sort chronologically (oldest first)
+  changes.sort((a, b) => a.changedAt.localeCompare(b.changedAt));
+
+  // Cold-start gap: true when earliest snapshot postdates cycle startsAt
+  const earliest = getEarliestCycleSnapshot(currentCycle.id);
+  const hasColdStartGap =
+    !earliest || new Date(earliest.capturedAt) > new Date(currentCycle.startsAt);
+
+  const added = changes.filter((c) => c.type === "added").length;
+  const removed = changes.filter((c) => c.type === "removed").length;
+
+  return {
+    added,
+    removed,
+    net: added - removed,
+    changes,
+    hasColdStartGap,
+    issueCountAtStart: currentCycle.issueCountHistory?.[0] ?? null,
+    issueCountNow: allIssueIds.length,
+  };
+}
+
+async function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 42): Promise<LinearMetrics> {
   const now = new Date();
   const since = new Date(now);
   since.setDate(since.getDate() - lookbackDays);
@@ -180,6 +353,30 @@ function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 42): Li
         )
       : 0;
 
+  // Find the current active cycle object for scope change tracking
+  const currentCycleObj = cycles.find(
+    (c) => new Date(c.startsAt) <= now && new Date(c.endsAt) >= now
+  );
+
+  // Compute scope changes for the current cycle
+  let scopeChanges: ScopeChangeSummary | null = null;
+  if (currentCycleObj) {
+    const issueMap = new Map(currentCycleObj.issues.nodes.map((i) => [i.id, i]));
+    const allIssueIds = currentCycleObj.issues.nodes.map((i) => i.id);
+    scopeChanges = await fetchScopeChanges(currentCycleObj, allIssueIds, issueMap);
+  }
+
+  // Silent snapshot writes for non-current cycles (previous and next sprint baselines, D-15)
+  for (const cycle of cycles) {
+    if (cycle === currentCycleObj) continue; // already handled inside fetchScopeChanges
+    try {
+      const ids = cycle.issues.nodes.map((i) => i.id);
+      writeCycleSnapshot(cycle.id, cycle.name || `Cycle ${cycle.number}`, ids);
+    } catch {
+      // Non-fatal
+    }
+  }
+
   return {
     mode: "cycles",
     velocityTrend,
@@ -198,6 +395,7 @@ function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 42): Li
       stalledIssueCount: currentSummary?.stalledCount ?? 0,
       avgVelocity,
     },
+    scopeChanges,
   };
 }
 
