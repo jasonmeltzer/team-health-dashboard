@@ -193,6 +193,8 @@ export async function fetchScopeChanges(
       const issId = batch[j];
       const issue = issueMap.get(issId);
       for (const entry of result.value) {
+        // Only count changes AFTER the sprint started — pre-sprint planning isn't scope change
+        if (new Date(entry.createdAt) < new Date(currentCycle.startsAt)) continue;
         const isAdded = entry.toCycleId === currentCycle.id;
         const type: "added" | "removed" = isAdded ? "added" : "removed";
         const actor =
