@@ -144,7 +144,8 @@ export function DashboardShell() {
           <SetupBanner
             unconfigured={unconfiguredList}
             onConnect={() => {
-              setSettingsInitialSection("github");
+              const first = unconfiguredList[0]?.toLowerCase() as "github" | "linear" | "slack" | "ai";
+              setSettingsInitialSection(first || "github");
               setSettingsOpen(true);
             }}
           />
@@ -152,14 +153,18 @@ export function DashboardShell() {
         </>
       )}
 
-      {/* Data Sections */}
-      <GitHubSection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
-      <LinearSection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
-      <DORASection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
-      <SlackSection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
+      {/* Data Sections — hidden when all integrations are unconfigured (WelcomeHero handles that state) */}
+      {!allUnconfigured && (
+        <>
+          <GitHubSection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
+          <LinearSection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
+          <DORASection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
+          <SlackSection refreshKey={refreshKey} onOpenSettings={(s) => { setSettingsInitialSection(s as "github" | "linear" | "slack" | "dora" | "ai" | "cache" | "scoring"); setSettingsOpen(true); }} />
 
-      {/* Weekly Narrative */}
-      <WeeklyNarrativeCard refreshKey={refreshKey} />
+          {/* Weekly Narrative */}
+          <WeeklyNarrativeCard refreshKey={refreshKey} />
+        </>
+      )}
     </div>
   );
 }

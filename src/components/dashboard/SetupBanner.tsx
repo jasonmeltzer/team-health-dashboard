@@ -41,7 +41,7 @@ export function SetupBanner({ unconfigured, onConnect }: SetupBannerProps) {
   };
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
+    <div role="status" aria-live="polite" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm font-normal text-amber-700 dark:text-amber-400">
           {buildBannerText(unconfigured)}{" "}

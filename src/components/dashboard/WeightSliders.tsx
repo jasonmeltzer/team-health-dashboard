@@ -139,6 +139,7 @@ export function WeightSliders({
                 onChange={(e) => handleSliderChange(key, Number(e.target.value))}
                 onMouseUp={handleSliderCommit}
                 onTouchEnd={handleSliderCommit}
+                onKeyUp={handleSliderCommit}
                 disabled={disabled}
                 className="flex-1 accent-zinc-900 dark:accent-zinc-100"
               />
