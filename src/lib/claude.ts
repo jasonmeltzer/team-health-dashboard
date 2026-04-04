@@ -447,6 +447,30 @@ function formatLinearRich(linear: LinearMetrics): string {
     }
   }
 
+  if (linear.scopeChanges && linear.mode === "cycles") {
+    const { added, removed, net, changes, hasColdStartGap, issueCountNow } = linear.scopeChanges;
+    const churnPct = issueCountNow > 0
+      ? Math.round(((added + removed) / issueCountNow) * 100)
+      : 0;
+    lines.push(`\n### Scope Churn`);
+    lines.push(`- Sprint size: ${issueCountNow} issues`);
+    lines.push(`- Added mid-sprint: ${added}`);
+    lines.push(`- Removed mid-sprint: ${removed}`);
+    lines.push(`- Net change: ${net > 0 ? "+" : ""}${net}`);
+    lines.push(`- Churn: ${churnPct}% (${added + removed} total movements)`);
+    if (hasColdStartGap) {
+      lines.push(`- Note: earlier scope changes may be untracked (no prior snapshot)`);
+    }
+    if (changes.length > 0) {
+      lines.push(`\n#### Individual Changes`);
+      for (const c of changes) {
+        const dest = c.destination ? ` -> ${c.destination}` : "";
+        const actor = c.actor ? ` by ${c.actor}` : "";
+        lines.push(`- [${c.type.toUpperCase()}] ${c.identifier} "${c.title}"${actor} at ${c.changedAt}${dest}`);
+      }
+    }
+  }
+
   return lines.join("\n");
 }
 
