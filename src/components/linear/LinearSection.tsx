@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useApiData } from "@/hooks/useApiData";
 import type { LinearMetrics, CycleInfo } from "@/types/linear";
 import { Card } from "@/components/ui/Card";
@@ -14,6 +14,7 @@ import { VelocityChart } from "./VelocityChart";
 import { StalledIssuesList } from "./StalledIssuesList";
 import { WorkloadDistribution } from "./WorkloadDistribution";
 import { TimeInState } from "./TimeInState";
+import { ScopeChangesCard } from "./ScopeChangesCard";
 
 const LinearIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
@@ -133,6 +134,14 @@ function CyclePicker({
 
 export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: number; onOpenSettings?: (section: string) => void }) {
   const [viewMode, setViewMode] = useState<ViewMode>("weekly");
+  useEffect(() => {
+    const saved = localStorage.getItem("linear-view-mode");
+    if (saved === "cycles" || saved === "weekly") setViewMode(saved);
+  }, []);
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem("linear-view-mode", mode);
+  };
   const [sliderDays, setSliderDays] = useState(42);
   const [committedDays, setCommittedDays] = useState(42);
   const [selectedCycleName, setSelectedCycleName] = useState<string | null>(null);
@@ -176,7 +185,7 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
         onChange={setSliderDays}
         onCommit={() => setCommittedDays(sliderDays)}
       />
-      <ViewToggle mode={viewMode} onChange={setViewMode} />
+      <ViewToggle mode={viewMode} onChange={handleViewModeChange} />
     </div>
   );
 
@@ -270,7 +279,7 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
         <RevalidatingBanner source="Linear" />
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className={cn("grid grid-cols-2 gap-3", isCycles && data.scopeChanges ? "sm:grid-cols-5" : "sm:grid-cols-4")}>
         <MetricCard
           label={isCycles ? "Cycle" : "Mode"}
           value={isCycles ? activeCycleName : data.summary.currentCycleName}
@@ -320,6 +329,34 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
             refreshing={refreshing}
           />
         )}
+        {isCycles && data.scopeChanges && (
+          <MetricCard
+            label="Scope Change"
+            value={data.scopeChanges.net >= 0 ? `+${data.scopeChanges.net}` : `${data.scopeChanges.net}`}
+            trendLabel={
+              <span
+                className={cn(
+                  "text-xs",
+                  data.scopeChanges.net > 0
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-zinc-500"
+                )}
+              >
+                {data.scopeChanges.net > 0
+                  ? "scope grew"
+                  : data.scopeChanges.net < 0
+                  ? "scope reduced"
+                  : "on track"}
+              </span>
+            }
+            refreshing={refreshing}
+            onClick={() => {
+              document
+                .getElementById("scope-changes")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          />
+        )}
       </div>
 
       {hasCycles && (
@@ -364,6 +401,12 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
           />
         </div>
       </Card>
+
+      {isCycles && data.scopeChangesByCycle?.[activeCycleName] && (
+        <ScopeChangesCard
+          summary={data.scopeChangesByCycle[activeCycleName]}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

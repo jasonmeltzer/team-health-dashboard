@@ -82,6 +82,28 @@ export interface CycleSummary {
   completedPoints: number;
 }
 
+export interface ScopeChange {
+  issueId: string;
+  identifier: string;   // e.g. "ENG-123"
+  title: string;
+  url: string;
+  type: "added" | "removed";
+  actor: string | null;       // display name, null if unknown
+  changedAt: string;          // ISO timestamp
+  destination: string | null; // cycle name if moved to another cycle, "backlog" if removed, null if unknown
+  source: "history" | "snapshot";  // attribution quality indicator
+}
+
+export interface ScopeChangeSummary {
+  added: number;
+  removed: number;
+  net: number;            // added - removed (positive = scope grew)
+  changes: ScopeChange[]; // sorted chronologically (oldest first)
+  hasColdStartGap: boolean;         // true when earliest snapshot postdates cycle startsAt
+  issueCountAtStart: number | null; // from issueCountHistory[0], null if unavailable
+  issueCountNow: number;            // current issues.nodes.length
+}
+
 export interface LinearMetrics {
   mode: "cycles" | "continuous";
   velocityTrend: VelocityDataPoint[];
@@ -100,4 +122,6 @@ export interface LinearMetrics {
     stalledIssueCount: number;
     avgVelocity: number;
   };
+  scopeChanges?: ScopeChangeSummary | null;
+  scopeChangesByCycle?: Record<string, ScopeChangeSummary>;
 }
