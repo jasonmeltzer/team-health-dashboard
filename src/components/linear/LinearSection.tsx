@@ -279,7 +279,7 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
         <RevalidatingBanner source="Linear" />
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className={cn("grid grid-cols-2 gap-3", isCycles && data.scopeChanges ? "sm:grid-cols-5" : "sm:grid-cols-4")}>
         <MetricCard
           label={isCycles ? "Cycle" : "Mode"}
           value={isCycles ? activeCycleName : data.summary.currentCycleName}

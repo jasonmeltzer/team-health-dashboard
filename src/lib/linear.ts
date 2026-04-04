@@ -151,9 +151,34 @@ async function fetchCycleHistoryForIssue(
     return data.issue.history.nodes.filter(
       (n) => n.fromCycleId === cycleId || n.toCycleId === cycleId
     );
-  } catch {
+  } catch (e) {
+    console.warn("[Linear] fetchCycleHistoryForIssue failed for", issueId, e);
     return []; // Non-fatal — degrade to snapshot-only
   }
+}
+
+async function fetchIssueMeta(
+  issueIds: string[]
+): Promise<Map<string, { identifier: string; title: string; url: string }>> {
+  const result = new Map<string, { identifier: string; title: string; url: string }>();
+  for (let i = 0; i < issueIds.length; i += 10) {
+    const batch = issueIds.slice(i, i + 10);
+    const results = await Promise.allSettled(
+      batch.map((id) =>
+        linearQuery<{ issue: { identifier: string; title: string; url: string } }>(
+          `query($id: String!) { issue(id: $id) { identifier title url } }`,
+          { id }
+        )
+      )
+    );
+    for (let j = 0; j < results.length; j++) {
+      const r = results[j];
+      if (r.status === "fulfilled" && r.value.issue) {
+        result.set(batch[j], r.value.issue);
+      }
+    }
+  }
+  return result;
 }
 
 export async function fetchScopeChanges(
@@ -178,7 +203,7 @@ export async function fetchScopeChanges(
 
   // Fetch IssueHistory for all relevant issues (current + removed from diff).
   // Note: Linear history retention is not documented; treat as best-effort.
-  // Batch in groups of 10 to avoid rate limits (conservative per RESEARCH.md).
+  // Batch in groups of 10 to avoid rate limits.
   // Track which issueId produced which history entries via batch index.
   const issueIdsToQuery = [...new Set([...allIssueIds, ...diff.removed])];
   const historyChangesByIssue: ScopeChange[] = [];
@@ -200,7 +225,7 @@ export async function fetchScopeChanges(
         const actor =
           entry.actor?.name ?? (entry.actorId ? "Unknown" : "Automation");
         // For removals, show destination cycle name or "backlog" if moved to no cycle.
-        // toCycleId === null means moved to backlog (Pitfall 6 from RESEARCH.md)
+        // toCycleId === null means moved to backlog
         const destination = !isAdded
           ? (entry.toCycle?.name ?? (entry.toCycleId === null ? "backlog" : null))
           : null;
@@ -221,6 +246,30 @@ export async function fetchScopeChanges(
 
   const changes: ScopeChange[] = [...historyChangesByIssue];
 
+  // Fetch metadata for removed issues not in issueMap (they left the cycle)
+  const unknownIds = [
+    ...diff.removed.filter((id) => !issueMap.has(id)),
+    ...historyChangesByIssue
+      .filter((c) => !issueMap.has(c.issueId))
+      .map((c) => c.issueId),
+  ];
+  const uniqueUnknownIds = [...new Set(unknownIds)];
+  const removedMeta = uniqueUnknownIds.length > 0
+    ? await fetchIssueMeta(uniqueUnknownIds)
+    : new Map<string, { identifier: string; title: string; url: string }>();
+
+  // Backfill history entries that had unknown issue metadata
+  for (const change of changes) {
+    if (change.identifier === change.issueId || change.title === "Unknown issue") {
+      const meta = removedMeta.get(change.issueId);
+      if (meta) {
+        change.identifier = meta.identifier;
+        change.title = meta.title;
+        change.url = meta.url;
+      }
+    }
+  }
+
   // Merge snapshot-diff entries for issues not already covered by Linear history.
   // Snapshot entries have no actor attribution — shown as null ("?") in the UI.
   const historyCoveredIds = new Set(
@@ -230,7 +279,7 @@ export async function fetchScopeChanges(
   if (prevSnapshot) {
     for (const id of diff.added) {
       if (historyCoveredIds.has(`added:${id}`)) continue;
-      const issue = issueMap.get(id);
+      const issue = issueMap.get(id) ?? removedMeta.get(id);
       changes.push({
         issueId: id,
         identifier: issue?.identifier ?? id,
@@ -245,11 +294,12 @@ export async function fetchScopeChanges(
     }
     for (const id of diff.removed) {
       if (historyCoveredIds.has(`removed:${id}`)) continue;
+      const meta = issueMap.get(id) ?? removedMeta.get(id);
       changes.push({
         issueId: id,
-        identifier: id,
-        title: "Unknown issue",
-        url: "",
+        identifier: meta?.identifier ?? id,
+        title: meta?.title ?? "Unknown issue",
+        url: meta?.url ?? "",
         type: "removed",
         actor: null,
         changedAt: prevSnapshot.capturedAt,
@@ -355,21 +405,47 @@ async function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 4
         )
       : 0;
 
-  // Compute scope changes for all cycles (current + past)
+  // Compute scope changes: full history fetch for current cycle only,
+  // snapshot-only (no IssueHistory API calls) for past/future cycles.
+  // Past cycles are immutable — re-fetching their history wastes API quota.
   let scopeChanges: ScopeChangeSummary | null = null;
   const scopeChangesByCycle: Record<string, ScopeChangeSummary> = {};
-  for (const cycle of cycles) {
+  if (currentCycle) {
     try {
-      const issueMap = new Map(cycle.issues.nodes.map((i) => [i.id, i]));
-      const allIssueIds = cycle.issues.nodes.map((i) => i.id);
-      const cycleName = cycle.name || `Cycle ${cycle.number}`;
-      const summary = await fetchScopeChanges(cycle, allIssueIds, issueMap);
-      scopeChangesByCycle[cycleName] = summary;
-      if (cycle === currentCycle) {
-        scopeChanges = summary;
+      const issueMap = new Map(currentCycle.issues.nodes.map((i) => [i.id, i]));
+      const allIssueIds = currentCycle.issues.nodes.map((i) => i.id);
+      const cycleName = currentCycle.name || `Cycle ${currentCycle.number}`;
+      scopeChanges = await fetchScopeChanges(currentCycle, allIssueIds, issueMap);
+      scopeChangesByCycle[cycleName] = scopeChanges;
+    } catch (e) {
+      console.warn("[Linear] Failed to fetch scope changes for current cycle:", e);
+    }
+  }
+  // Write snapshots for non-current cycles (baseline pre-caching) without history API calls
+  for (const cycle of cycles) {
+    if (cycle === currentCycle) continue;
+    const cycleName = cycle.name || `Cycle ${cycle.number}`;
+    try {
+      const ids = cycle.issues.nodes.map((i) => i.id);
+      writeCycleSnapshot(cycle.id, cycleName, ids);
+      // Build snapshot-only scope changes (no history API calls)
+      const prevSnapshot = getLatestCycleSnapshot(cycle.id);
+      if (prevSnapshot) {
+        const diff = diffSnapshots(prevSnapshot.issueIds, ids);
+        const added = diff.added.length;
+        const removed = diff.removed.length;
+        scopeChangesByCycle[cycleName] = {
+          added,
+          removed,
+          net: added - removed,
+          changes: [], // No detailed entries without history fetch
+          hasColdStartGap: true,
+          issueCountAtStart: cycle.issueCountHistory?.[0] ?? null,
+          issueCountNow: ids.length,
+        };
       }
-    } catch {
-      // Non-fatal — snapshot write still happens inside fetchScopeChanges
+    } catch (e) {
+      console.warn("[Linear] Failed to snapshot cycle", cycleName, e);
     }
   }
 

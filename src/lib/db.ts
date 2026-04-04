@@ -126,8 +126,8 @@ export function writeCycleSnapshot(
       DELETE FROM cycle_snapshots
       WHERE is_baseline = 0 AND captured_at < datetime('now', '-90 days')
     `).run();
-  } catch {
-    // Non-fatal — snapshot failure must not break API response
+  } catch (e) {
+    console.warn("[DB] cycle snapshot write failed:", e);
   }
 }
 
@@ -143,7 +143,8 @@ export function getLatestCycleSnapshot(
       .get(cycleId) as { issue_ids: string; captured_at: string } | undefined;
     if (!row) return null;
     return { issueIds: JSON.parse(row.issue_ids), capturedAt: row.captured_at };
-  } catch {
+  } catch (e) {
+    console.warn("[DB] getLatestCycleSnapshot failed:", e);
     return null;
   }
 }
@@ -160,7 +161,8 @@ export function getEarliestCycleSnapshot(
       .get(cycleId) as { issue_ids: string; captured_at: string } | undefined;
     if (!row) return null;
     return { issueIds: JSON.parse(row.issue_ids), capturedAt: row.captured_at };
-  } catch {
+  } catch (e) {
+    console.warn("[DB] getEarliestCycleSnapshot failed:", e);
     return null;
   }
 }
