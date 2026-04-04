@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { computeHealthScore } from "../scoring";
 import type { PRMetrics } from "@/types/github";
-import type { LinearMetrics } from "@/types/linear";
+import type { LinearMetrics, ScopeChangeSummary } from "@/types/linear";
 import type { SlackMetrics } from "@/types/slack";
 import type { DORAMetrics } from "@/types/dora";
 
@@ -28,16 +28,31 @@ function makeGitHub(overrides: Partial<{
   };
 }
 
+function makeScopeChanges(overrides: Partial<ScopeChangeSummary> = {}): ScopeChangeSummary {
+  return {
+    added: overrides.added ?? 0,
+    removed: overrides.removed ?? 0,
+    net: (overrides.added ?? 0) - (overrides.removed ?? 0),
+    changes: [],
+    hasColdStartGap: overrides.hasColdStartGap ?? false,
+    issueCountAtStart: overrides.issueCountAtStart ?? null,
+    issueCountNow: overrides.issueCountNow ?? 10,
+    ...overrides,
+  };
+}
+
 function makeLinear(overrides: Partial<{
   stalledIssueCount: number;
   workloads: number[];
   velocityTrend: { completedPoints: number }[];
   flowEfficiency: number;
   avgWIP: number;
+  mode: "cycles" | "continuous";
+  scopeChanges: ScopeChangeSummary | null;
 }> = {}): LinearMetrics {
   const workloads = overrides.workloads ?? [3, 3, 3];
   return {
-    mode: "continuous" as const,
+    mode: (overrides.mode ?? "continuous") as LinearMetrics["mode"],
     availableCycles: [],
     workloadByCycle: {},
     summary: {
@@ -72,6 +87,7 @@ function makeLinear(overrides: Partial<{
     timeInStateByCycle: {},
     stalledIssuesByCycle: {},
     summaryByCycle: {},
+    scopeChanges: overrides.scopeChanges ?? undefined,
   };
 }
 
@@ -432,6 +448,98 @@ describe("computeHealthScore", () => {
       );
       const eff = result.deductions.find((d) => d.signal === "Flow efficiency");
       expect(eff!.points).toBe(4); // <15%
+    });
+  });
+
+  describe("Linear scope churn signal", () => {
+    it("no churn deduction in weekly (continuous) mode — maxPoints=0", () => {
+      const linear = makeLinear({
+        mode: "continuous",
+        scopeChanges: makeScopeChanges({ added: 5, removed: 3, issueCountNow: 10 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const churn = result.deductions.find((d) => d.signal === "Scope churn");
+      expect(churn!.points).toBe(0);
+      expect(churn!.maxPoints).toBe(0);
+    });
+
+    it("cycles mode with null scopeChanges — maxPoints=0", () => {
+      const linear = makeLinear({ mode: "cycles", scopeChanges: null });
+      const result = computeHealthScore(null, linear, null);
+      const churn = result.deductions.find((d) => d.signal === "Scope churn");
+      expect(churn!.points).toBe(0);
+      expect(churn!.maxPoints).toBe(0);
+    });
+
+    it("cycles mode, 10% churn (at threshold) — no deduction", () => {
+      // 1 added, 0 removed, 10 issues = 10% exactly → 0 pts (strictly greater-than)
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ added: 1, removed: 0, issueCountNow: 10 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const churn = result.deductions.find((d) => d.signal === "Scope churn");
+      expect(churn!.points).toBe(0);
+      expect(churn!.maxPoints).toBe(4);
+    });
+
+    it("cycles mode, >10% churn — 1pt deduction", () => {
+      // 2 added, 0 removed, 18 issues = 11.1% → 1 pt
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ added: 2, removed: 0, issueCountNow: 18 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const churn = result.deductions.find((d) => d.signal === "Scope churn");
+      expect(churn!.points).toBe(1);
+      expect(churn!.maxPoints).toBe(4);
+    });
+
+    it("cycles mode, >20% churn — 2pt deduction", () => {
+      // 2 added, 0 removed, 9 issues = 22.2% → 2 pts
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ added: 2, removed: 0, issueCountNow: 9 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const churn = result.deductions.find((d) => d.signal === "Scope churn");
+      expect(churn!.points).toBe(2);
+      expect(churn!.maxPoints).toBe(4);
+    });
+
+    it("cycles mode, >30% churn — 4pt deduction", () => {
+      // 3 added, 1 removed, 10 issues = 40% → 4 pts
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ added: 3, removed: 1, issueCountNow: 10 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const churn = result.deductions.find((d) => d.signal === "Scope churn");
+      expect(churn!.points).toBe(4);
+      expect(churn!.maxPoints).toBe(4);
+    });
+
+    it("cycles mode, zero churn — healthy", () => {
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ added: 0, removed: 0, issueCountNow: 10 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const churn = result.deductions.find((d) => d.signal === "Scope churn");
+      expect(churn!.points).toBe(0);
+      expect(churn!.maxPoints).toBe(4);
+    });
+
+    it("cycles mode, empty sprint (issueCountNow=0) — no crash, 0 churn", () => {
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ added: 0, removed: 0, issueCountNow: 0 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const churn = result.deductions.find((d) => d.signal === "Scope churn");
+      expect(churn!.points).toBe(0);
+      // maxPoints=0 for empty sprint (excluded from denominator)
+      expect(churn!.maxPoints).toBe(0);
     });
   });
 });
