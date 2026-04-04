@@ -192,12 +192,15 @@ ${deductionSummary || "  (none — everything looks healthy)"}`;
     }
 
     if (linear) {
+      const churnLine = linear.scopeChanges && linear.mode === "cycles" && linear.scopeChanges.issueCountNow > 0
+        ? `\n- Scope churn: ${Math.round(((linear.scopeChanges.added + linear.scopeChanges.removed) / linear.scopeChanges.issueCountNow) * 100)}% (${linear.scopeChanges.added} added, ${linear.scopeChanges.removed} removed)`
+        : "";
       sections.push(`Linear Sprint Metrics:
 - Current cycle: ${linear.summary.currentCycleName} (${linear.summary.currentCycleProgress}% complete)
 - Active issues: ${linear.summary.totalActiveIssues}
 - Stalled issues (>5 days no update): ${linear.summary.stalledIssueCount}
 - Average velocity: ${linear.summary.avgVelocity} points/cycle
-- Workload: ${JSON.stringify(linear.workloadDistribution.slice(0, 5))}`);
+- Workload: ${JSON.stringify(linear.workloadDistribution.slice(0, 5))}${churnLine}`);
     }
 
     if (slack) {
@@ -293,7 +296,8 @@ Rules:
 - Be direct and specific — cite actual numbers from the data. Name specific people, PRs, or issues when relevant.
 - Focus on what changed, what's at risk, and what to do about it. Skip generic advice.
 - The tone should be like a sharp engineering manager's weekly update to their skip-level.
-- Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}. Do not reference, speculate about, or suggest configuring these.` : ""}`;
+- Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}. Do not reference, speculate about, or suggest configuring these.` : ""}
+- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; >20% flag as concern and suggest planning improvement.`;
 
     const sections: string[] = [];
 
@@ -305,10 +309,13 @@ Review bottlenecks: ${JSON.stringify(github.reviewBottlenecks, null, 2)}`);
     }
 
     if (linear) {
+      const scopeLine = linear.scopeChanges && linear.mode === "cycles" && linear.scopeChanges.issueCountNow > 0
+        ? `\nScope churn: ${Math.round(((linear.scopeChanges.added + linear.scopeChanges.removed) / linear.scopeChanges.issueCountNow) * 100)}% (${linear.scopeChanges.added} added, ${linear.scopeChanges.removed} removed of ${linear.scopeChanges.issueCountNow} issues)`
+        : "";
       sections.push(`Linear Sprint Data:
 Velocity trend: ${JSON.stringify(linear.velocityTrend, null, 2)}
 Stalled issues: ${JSON.stringify(linear.stalledIssues, null, 2)}
-Workload: ${JSON.stringify(linear.workloadDistribution, null, 2)}`);
+Workload: ${JSON.stringify(linear.workloadDistribution, null, 2)}${scopeLine}`);
     }
 
     if (slack) {
@@ -444,6 +451,30 @@ function formatLinearRich(linear: LinearMetrics): string {
     lines.push(`\n### Stalled Issues`);
     for (const issue of linear.stalledIssues) {
       lines.push(`- ${issue.identifier} "${issue.title}" — ${issue.state}, ${issue.daysSinceLastUpdate}d no update, assignee: ${issue.assignee || "unassigned"}`);
+    }
+  }
+
+  if (linear.scopeChanges && linear.mode === "cycles") {
+    const { added, removed, net, changes, hasColdStartGap, issueCountNow } = linear.scopeChanges;
+    const churnPct = issueCountNow > 0
+      ? Math.round(((added + removed) / issueCountNow) * 100)
+      : 0;
+    lines.push(`\n### Scope Churn`);
+    lines.push(`- Sprint size: ${issueCountNow} issues`);
+    lines.push(`- Added mid-sprint: ${added}`);
+    lines.push(`- Removed mid-sprint: ${removed}`);
+    lines.push(`- Net change: ${net > 0 ? "+" : ""}${net}`);
+    lines.push(`- Churn: ${churnPct}% (${added + removed} total movements)`);
+    if (hasColdStartGap) {
+      lines.push(`- Note: earlier scope changes may be untracked (no prior snapshot)`);
+    }
+    if (changes.length > 0) {
+      lines.push(`\n#### Individual Changes`);
+      for (const c of changes) {
+        const dest = c.destination ? ` -> ${c.destination}` : "";
+        const actor = c.actor ? ` by ${c.actor}` : "";
+        lines.push(`- [${c.type.toUpperCase()}] ${c.identifier} "${c.title}"${actor} at ${c.changedAt}${dest}`);
+      }
     }
   }
 
@@ -738,7 +769,8 @@ Rules:
 - Be direct and specific — cite actual numbers from the data. Name specific people, PRs, or issues when relevant.
 - Focus on what changed, what's at risk, and what to do about it. Skip generic advice.
 - The tone should be like a sharp engineering manager's weekly update to their skip-level.
-- Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}.` : ""}`;
+- Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}.` : ""}
+- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; >20% flag as concern and suggest planning improvement.`;
 
   const dataSections: string[] = [];
   if (github) dataSections.push(formatGitHubRich(github));
