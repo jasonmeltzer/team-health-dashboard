@@ -197,7 +197,7 @@ The health score is **deterministic** — same data always produces the same sco
 | Category | Max Points | Signals |
 |----------|-----------|---------|
 | **GitHub** | 30 | Cycle time (8), stale PRs (8), review queue (7), cycle time trend (7) |
-| **Linear** | 30 | Stalled issues (6), workload imbalance (6), velocity trend (6), flow efficiency (4), WIP per person (4), long-running items (4) |
+| **Linear** | 34 | Stalled issues (6), workload imbalance (6), velocity trend (6), flow efficiency (4), WIP per person (4), long-running items (4), scope churn (4, cycles only) |
 | **Slack** | 20 | Response time (8), overloaded members (6), response time trend (6) |
 | **DORA** | 20 | Deploy frequency (5), lead time (5), change failure rate (5), MTTR (5) |
 

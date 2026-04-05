@@ -91,13 +91,14 @@ Starts at 100, subtracts points for signals of trouble. Only scores against conn
 - **Review queue** (0-7): % of open PRs needing review. >75% = -7, >50% = -6, >25% = -4, >10% = -2
 - **Cycle time trend** (0-7): latest week vs average. >1.5× = -7, >1.25× = -4, >1.1× = -2
 
-### Linear signals (max 30 pts)
+### Linear signals (max 34 pts)
 - **Stalled issues** (0-6): issues with no update in 5+ days. 5+ = -6, 3-4 = -4, 2 = -3, 1 = -1
 - **Workload imbalance** (0-6): max/median active count ratio. >2.5× = -6, >2× = -4, >1.5× = -2
 - **Velocity trend** (0-6): latest vs average. <50% = -6, <75% = -4, <90% = -2
 - **Flow efficiency** (0-4): % active work time. <15% = -4, <25% = -2, <40% = -1
 - **WIP per person** (0-4): avg in-progress per person. >7 = -4, >5 = -2, >3 = -1
 - **Long-running items** (0-4): % of active issues past p90. >20% = -4, >15% = -3, >10% = -2, >5% = -1
+- **Scope churn** (0-4, cycles mode only): (added + removed) / sprintSize. >30% = -4, >20% = -2, >10% = -1. maxPoints=0 in weekly mode or when scope data unavailable.
 
 ### Slack signals (max 20 pts)
 - **Response time** (0-8): avg response minutes. >60m = -8, >30m = -6, >15m = -4, >5m = -2
