@@ -110,7 +110,7 @@ function scoreGitHub(github: PRMetrics): ScoreDeduction[] {
   return deductions;
 }
 
-/* ─── Linear (max 30 pts) ─────────────────────────────────────────────── */
+/* ─── Linear (max 30 pts in continuous mode; max 34 pts in cycles mode with scope data) ─── */
 
 /** True statistical median of a sorted numeric array. Caller must ensure array is non-empty and sorted ascending. */
 function median(sorted: number[]): number {
@@ -257,6 +257,34 @@ function scoreLinear(linear: LinearMetrics): ScoreDeduction[] {
     points: outlierPts,
     maxPoints: 4,
     detail: `${outlierCount}/${activeIssues.length} active items past p90 (${Math.round(outlierPct)}%)`,
+  });
+
+  // 7. Scope churn (0-4 pts, cycles mode only)
+  const scopeChanges = linear.scopeChanges;
+  const isCyclesMode = linear.mode === "cycles";
+  let churnPts = 0;
+  let churnDetail = "Continuous mode (not scored)";
+
+  if (isCyclesMode && scopeChanges != null) {
+    const sprintSize = scopeChanges.issueCountNow;
+    const movements = scopeChanges.added + scopeChanges.removed;
+    const churnPct = sprintSize > 0 ? (movements / sprintSize) * 100 : 0;
+    if (churnPct > 30) churnPts = 4;
+    else if (churnPct > 20) churnPts = 2;
+    else if (churnPct > 10) churnPts = 1;
+    churnDetail = sprintSize > 0
+      ? `${Math.round(churnPct)}% churn (${scopeChanges.added} added, ${scopeChanges.removed} removed of ${sprintSize})`
+      : "Empty sprint";
+  } else if (isCyclesMode) {
+    churnDetail = "No scope data available";
+  }
+
+  deductions.push({
+    signal: "Scope churn",
+    category: "linear",
+    points: churnPts,
+    maxPoints: isCyclesMode && scopeChanges != null && scopeChanges.issueCountNow > 0 ? 4 : 0,
+    detail: churnDetail,
   });
 
   return deductions;
