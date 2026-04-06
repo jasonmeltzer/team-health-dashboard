@@ -110,7 +110,7 @@ function scoreGitHub(github: PRMetrics): ScoreDeduction[] {
   return deductions;
 }
 
-/* ─── Linear (max 30 pts in continuous mode; max 34 pts in cycles mode with scope data) ─── */
+/* ─── Linear (max 30 pts in continuous mode; max 38 pts in cycles mode with scope data) ─── */
 
 /** True statistical median of a sorted numeric array. Caller must ensure array is non-empty and sorted ascending. */
 function median(sorted: number[]): number {
