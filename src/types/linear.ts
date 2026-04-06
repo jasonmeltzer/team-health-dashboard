@@ -92,6 +92,7 @@ export interface ScopeChange {
   changedAt: string;          // ISO timestamp
   destination: string | null; // cycle name if moved to another cycle, "backlog" if removed, null if unknown
   source: "history" | "snapshot";  // attribution quality indicator
+  isCarryOver: boolean;       // true if carried over from the previous cycle
 }
 
 export interface ScopeChangeSummary {
@@ -102,6 +103,9 @@ export interface ScopeChangeSummary {
   hasColdStartGap: boolean;         // true when earliest snapshot postdates cycle startsAt
   issueCountAtStart: number | null; // from issueCountHistory[0], null if unavailable
   issueCountNow: number;            // current issues.nodes.length
+  midSprintAdded: number;    // added count excluding carry-overs
+  midSprintRemoved: number;  // removed count (carry-overs can only be "added")
+  carryOvers: number;        // count of isCarryOver === true
 }
 
 export interface LinearMetrics {

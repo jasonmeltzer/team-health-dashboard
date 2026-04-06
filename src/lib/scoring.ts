@@ -259,7 +259,7 @@ function scoreLinear(linear: LinearMetrics): ScoreDeduction[] {
     detail: `${outlierCount}/${activeIssues.length} active items past p90 (${Math.round(outlierPct)}%)`,
   });
 
-  // 7. Scope churn (0-4 pts, cycles mode only)
+  // 7. Scope churn (0-4 pts, cycles mode only) — mid-sprint only, carry-overs excluded
   const scopeChanges = linear.scopeChanges;
   const isCyclesMode = linear.mode === "cycles";
   let churnPts = 0;
@@ -267,13 +267,13 @@ function scoreLinear(linear: LinearMetrics): ScoreDeduction[] {
 
   if (isCyclesMode && scopeChanges != null) {
     const sprintSize = scopeChanges.issueCountNow;
-    const movements = scopeChanges.added + scopeChanges.removed;
+    const movements = scopeChanges.midSprintAdded + scopeChanges.midSprintRemoved;
     const churnPct = sprintSize > 0 ? (movements / sprintSize) * 100 : 0;
     if (churnPct > 30) churnPts = 4;
     else if (churnPct > 20) churnPts = 2;
     else if (churnPct > 10) churnPts = 1;
     churnDetail = sprintSize > 0
-      ? `${Math.round(churnPct)}% churn (${scopeChanges.added} added, ${scopeChanges.removed} removed of ${sprintSize})`
+      ? `${Math.round(churnPct)}% mid-sprint churn (${scopeChanges.midSprintAdded} added, ${scopeChanges.midSprintRemoved} removed of ${sprintSize})`
       : "Empty sprint";
   } else if (isCyclesMode) {
     churnDetail = "No scope data available";
@@ -285,6 +285,32 @@ function scoreLinear(linear: LinearMetrics): ScoreDeduction[] {
     points: churnPts,
     maxPoints: isCyclesMode && scopeChanges != null && scopeChanges.issueCountNow > 0 ? 4 : 0,
     detail: churnDetail,
+  });
+
+  // 8. Scope carry-overs (0-4 pts, cycles mode only)
+  const carryOvers = scopeChanges?.carryOvers ?? 0;
+  let carryOverPts = 0;
+  let carryOverDetail = "Continuous mode (not scored)";
+
+  if (isCyclesMode && scopeChanges != null) {
+    const sprintSize = scopeChanges.issueCountNow;
+    const carryOverPct = sprintSize > 0 ? (carryOvers / sprintSize) * 100 : 0;
+    if (carryOverPct > 30) carryOverPts = 4;
+    else if (carryOverPct > 20) carryOverPts = 2;
+    else if (carryOverPct > 10) carryOverPts = 1;
+    carryOverDetail = sprintSize > 0
+      ? `${Math.round(carryOverPct)}% carry-over rate (${carryOvers} of ${sprintSize} issues carried over)`
+      : "Empty sprint";
+  } else if (isCyclesMode) {
+    carryOverDetail = "No scope data available";
+  }
+
+  deductions.push({
+    signal: "Scope carry-overs",
+    category: "linear",
+    points: carryOverPts,
+    maxPoints: isCyclesMode && scopeChanges != null && scopeChanges.issueCountNow > 0 ? 4 : 0,
+    detail: carryOverDetail,
   });
 
   return deductions;

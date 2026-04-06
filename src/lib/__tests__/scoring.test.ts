@@ -29,14 +29,20 @@ function makeGitHub(overrides: Partial<{
 }
 
 function makeScopeChanges(overrides: Partial<ScopeChangeSummary> = {}): ScopeChangeSummary {
+  const added = overrides.added ?? 0;
+  const removed = overrides.removed ?? 0;
+  const carryOvers = overrides.carryOvers ?? 0;
   return {
-    added: overrides.added ?? 0,
-    removed: overrides.removed ?? 0,
-    net: (overrides.added ?? 0) - (overrides.removed ?? 0),
+    added,
+    removed,
+    net: added - removed,
     changes: [],
     hasColdStartGap: overrides.hasColdStartGap ?? false,
     issueCountAtStart: overrides.issueCountAtStart ?? null,
     issueCountNow: overrides.issueCountNow ?? 10,
+    midSprintAdded: overrides.midSprintAdded ?? (added - carryOvers),
+    midSprintRemoved: overrides.midSprintRemoved ?? removed,
+    carryOvers,
     ...overrides,
   };
 }
@@ -451,6 +457,93 @@ describe("computeHealthScore", () => {
     });
   });
 
+  describe("Linear scope carry-over signal", () => {
+    it("continuous mode — maxPoints=0, points=0", () => {
+      const linear = makeLinear({
+        mode: "continuous",
+        scopeChanges: makeScopeChanges({ carryOvers: 3, issueCountNow: 10 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const co = result.deductions.find((d) => d.signal === "Scope carry-overs");
+      expect(co!.points).toBe(0);
+      expect(co!.maxPoints).toBe(0);
+    });
+
+    it("cycles mode with null scopeChanges — maxPoints=0, points=0", () => {
+      const linear = makeLinear({ mode: "cycles", scopeChanges: null });
+      const result = computeHealthScore(null, linear, null);
+      const co = result.deductions.find((d) => d.signal === "Scope carry-overs");
+      expect(co!.points).toBe(0);
+      expect(co!.maxPoints).toBe(0);
+    });
+
+    it("cycles mode, 10% carry-over rate (1 of 10) — 0 pts (at threshold, not exceeded)", () => {
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ carryOvers: 1, issueCountNow: 10 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const co = result.deductions.find((d) => d.signal === "Scope carry-overs");
+      expect(co!.points).toBe(0);
+      expect(co!.maxPoints).toBe(4);
+    });
+
+    it("cycles mode, >10% carry-over rate (2 of 18 = 11.1%) — 1 pt", () => {
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ carryOvers: 2, issueCountNow: 18 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const co = result.deductions.find((d) => d.signal === "Scope carry-overs");
+      expect(co!.points).toBe(1);
+      expect(co!.maxPoints).toBe(4);
+    });
+
+    it("cycles mode, >20% carry-over rate (3 of 12 = 25%) — 2 pts", () => {
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ carryOvers: 3, issueCountNow: 12 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const co = result.deductions.find((d) => d.signal === "Scope carry-overs");
+      expect(co!.points).toBe(2);
+      expect(co!.maxPoints).toBe(4);
+    });
+
+    it("cycles mode, >30% carry-over rate (4 of 10 = 40%) — 4 pts", () => {
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ carryOvers: 4, issueCountNow: 10 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const co = result.deductions.find((d) => d.signal === "Scope carry-overs");
+      expect(co!.points).toBe(4);
+      expect(co!.maxPoints).toBe(4);
+    });
+
+    it("cycles mode, zero carry-overs — 0 pts, maxPoints=4", () => {
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ carryOvers: 0, issueCountNow: 10 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const co = result.deductions.find((d) => d.signal === "Scope carry-overs");
+      expect(co!.points).toBe(0);
+      expect(co!.maxPoints).toBe(4);
+    });
+
+    it("cycles mode, empty sprint (issueCountNow=0) — maxPoints=0", () => {
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({ carryOvers: 0, issueCountNow: 0 }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const co = result.deductions.find((d) => d.signal === "Scope carry-overs");
+      expect(co!.points).toBe(0);
+      expect(co!.maxPoints).toBe(0);
+    });
+  });
+
   describe("Linear scope churn signal", () => {
     it("no churn deduction in weekly (continuous) mode — maxPoints=0", () => {
       const linear = makeLinear({
@@ -484,7 +577,7 @@ describe("computeHealthScore", () => {
     });
 
     it("cycles mode, >10% churn — 1pt deduction", () => {
-      // 2 added, 0 removed, 18 issues = 11.1% → 1 pt
+      // 2 mid-sprint added, 0 removed, 18 issues = 11.1% → 1 pt
       const linear = makeLinear({
         mode: "cycles",
         scopeChanges: makeScopeChanges({ added: 2, removed: 0, issueCountNow: 18 }),
@@ -492,6 +585,24 @@ describe("computeHealthScore", () => {
       const result = computeHealthScore(null, linear, null);
       const churn = result.deductions.find((d) => d.signal === "Scope churn");
       expect(churn!.points).toBe(1);
+      expect(churn!.maxPoints).toBe(4);
+    });
+
+    it("cycles mode, carry-overs excluded from churn — only mid-sprint counted", () => {
+      const linear = makeLinear({
+        mode: "cycles",
+        scopeChanges: makeScopeChanges({
+          added: 5,          // total added (3 carry-overs + 2 mid-sprint)
+          removed: 0,
+          carryOvers: 3,
+          midSprintAdded: 2, // only 2 mid-sprint adds
+          midSprintRemoved: 0,
+          issueCountNow: 20,
+        }),
+      });
+      const result = computeHealthScore(null, linear, null);
+      const churn = result.deductions.find((d) => d.signal === "Scope churn");
+      expect(churn!.points).toBe(0); // 2/20 = 10% -> 0 pts (at threshold, not exceeded)
       expect(churn!.maxPoints).toBe(4);
     });
 
