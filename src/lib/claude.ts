@@ -176,6 +176,7 @@ Rules:
 - recommendations: 2-3 actionable strings. Be specific about what to do.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}. Do not reference, speculate about, or suggest configuring these.` : ""}
 - Focus your insights on the signals that scored poorly (shown below).
+- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.
 
 Score breakdown (signals that lost points):
 ${deductionSummary || "  (none — everything looks healthy)"}`;
@@ -297,7 +298,7 @@ Rules:
 - Focus on what changed, what's at risk, and what to do about it. Skip generic advice.
 - The tone should be like a sharp engineering manager's weekly update to their skip-level.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}. Do not reference, speculate about, or suggest configuring these.` : ""}
-- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; >20% flag as concern and suggest planning improvement.`;
+- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.`;
 
     const sections: string[] = [];
 
@@ -733,6 +734,7 @@ Rules:
 - recommendations: 2-3 actionable strings. Be specific about what to do and who should do it.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}.` : ""}
 - Focus your insights on the signals that scored poorly.
+- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.
 
 Score breakdown (signals that lost points):
 ${deductionSummary || "  (none — everything looks healthy)"}`;
@@ -770,7 +772,7 @@ Rules:
 - Focus on what changed, what's at risk, and what to do about it. Skip generic advice.
 - The tone should be like a sharp engineering manager's weekly update to their skip-level.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}.` : ""}
-- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; >20% flag as concern and suggest planning improvement.`;
+- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.`;
 
   const dataSections: string[] = [];
   if (github) dataSections.push(formatGitHubRich(github));

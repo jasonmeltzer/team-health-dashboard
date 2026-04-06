@@ -259,11 +259,11 @@ function scoreLinear(linear: LinearMetrics): ScoreDeduction[] {
     detail: `${outlierCount}/${activeIssues.length} active items past p90 (${Math.round(outlierPct)}%)`,
   });
 
-  // 7. Scope churn (0-4 pts, cycles mode only) — per D-01
+  // 7. Scope churn (0-4 pts, cycles mode only)
   const scopeChanges = linear.scopeChanges;
   const isCyclesMode = linear.mode === "cycles";
   let churnPts = 0;
-  let churnDetail = "Weekly mode (not scored)";
+  let churnDetail = "Continuous mode (not scored)";
 
   if (isCyclesMode && scopeChanges != null) {
     const sprintSize = scopeChanges.issueCountNow;
