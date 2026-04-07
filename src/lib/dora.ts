@@ -1,4 +1,10 @@
 import { Octokit } from "octokit";
+import {
+  fetchAndStoreDeployments,
+  readDeployments,
+  getSharedDb,
+  type StoredDeployment,
+} from "team-data-core";
 import type {
   DORAMetrics,
   DeploymentRecord,
@@ -9,6 +15,12 @@ import type {
 } from "@/types/dora";
 import { getISOWeek, hoursBetween, daysAgo } from "@/lib/utils";
 import { getConfig } from "@/lib/config";
+
+// Internal extended record that carries the shared DB primary key for writeback.
+// This type is not exposed outside this module.
+interface DeploymentRecordWithSharedId extends DeploymentRecord {
+  sharedDbId: string;
+}
 
 interface DORAOptions {
   source?: "deployments" | "releases" | "merges" | "auto";
@@ -22,8 +34,10 @@ export async function fetchDORAMetrics(
   lookbackDays: number = 30,
   options: DORAOptions = {}
 ): Promise<DORAMetrics> {
+  const token = getConfig("GITHUB_TOKEN")!;
+  // Octokit is still needed for incident fetching (GitHub issues + revert PRs)
   const octokit = new Octokit({
-    auth: getConfig("GITHUB_TOKEN"),
+    auth: token,
     retry: { enabled: false },
     throttle: { enabled: false },
   });
@@ -46,202 +60,92 @@ export async function fetchDORAMetrics(
     incidentLabels
   );
 
-  // Fetch deployments, releases, or merged PRs
-  let deployments: DeploymentRecord[];
-  let usedSource: "deployments" | "releases" | "merges";
+  // Fetch deployments and store in shared DB
+  await fetchAndStoreDeployments(token, owner, repo, {
+    lookbackDays,
+    environment,
+    source,
+  });
 
-  if (source === "releases") {
-    deployments = await fetchReleases(octokit, owner, repo, since);
-    usedSource = "releases";
-  } else if (source === "deployments") {
-    deployments = await fetchDeployments(
-      octokit,
-      owner,
-      repo,
-      since,
-      environment
-    );
-    usedSource = "deployments";
-  } else if (source === "merges") {
-    deployments = await fetchMergedPRs(octokit, owner, repo, since);
-    usedSource = "merges";
-  } else {
-    // auto: sequential waterfall is by design — must check each source before falling back
-    deployments = await fetchDeployments(
-      octokit,
-      owner,
-      repo,
-      since,
-      environment
-    );
-    if (deployments.length > 0) {
+  // Read back from shared DB
+  const storedDeployments: StoredDeployment[] = readDeployments(owner, repo, {
+    lookbackDays,
+    environment,
+  });
+
+  // Determine which source was actually used (read from stored data IDs)
+  // StoredDeployment IDs are prefixed: "owner/repo#deploy-N", "owner/repo#release-N", "owner/repo#merge-N"
+  let usedSource: "deployments" | "releases" | "merges" = "merges";
+  if (storedDeployments.length > 0) {
+    const firstId = storedDeployments[0].id;
+    if (firstId.includes("#deploy-")) {
       usedSource = "deployments";
-    } else {
-      deployments = await fetchReleases(octokit, owner, repo, since);
-      if (deployments.length > 0) {
-        usedSource = "releases";
-      } else {
-        deployments = await fetchMergedPRs(octokit, owner, repo, since);
-        usedSource = "merges";
-      }
+    } else if (firstId.includes("#release-")) {
+      usedSource = "releases";
+    } else if (firstId.includes("#merge-")) {
+      usedSource = "merges";
     }
   }
+
+  // Convert StoredDeployment[] to internal DeploymentRecordWithSharedId[]
+  const deploymentRecords: DeploymentRecordWithSharedId[] = storedDeployments.map(
+    (d): DeploymentRecordWithSharedId => {
+      // Validate status — StoredDeployment.status is a string, coerce to union type
+      const rawStatus = d.status;
+      const status: DeploymentRecord["status"] =
+        rawStatus === "success" || rawStatus === "failure" || rawStatus === "error"
+          ? rawStatus
+          : "pending";
+
+      return {
+        sharedDbId: d.id,
+        id: d.id,
+        environment: d.environment,
+        sha: d.sha ?? "",
+        ref: d.ref ?? "",
+        createdAt: d.created_at,
+        status,
+        url: `https://github.com/${owner}/${repo}/commit/${d.sha ?? ""}`,
+        creator: d.creator ?? "unknown",
+        description: d.description,
+        causedIncident: false, // recalculated during incident correlation
+      };
+    }
+  );
 
   // Await the incident fetch that was started in parallel above
   const incidents = await incidentsPromise;
 
-  // Correlate incidents to deployments
-  correlateIncidents(deployments, incidents);
+  // Correlate incidents to deployments (updates causedIncident on deploymentRecords)
+  correlateIncidents(deploymentRecords, incidents);
+
+  // Write back caused_incident to shared DB so other consumers see accurate data
+  try {
+    const db = getSharedDb();
+    const updateStmt = db.prepare("UPDATE deployments SET caused_incident = ? WHERE id = ?");
+    const writeBack = db.transaction((records: DeploymentRecordWithSharedId[]) => {
+      for (const d of records) {
+        if (d.causedIncident) {
+          updateStmt.run(1, d.sharedDbId);
+        }
+      }
+    });
+    writeBack(deploymentRecords);
+  } catch {
+    // Non-fatal: writeback failure should not break the DORA response
+  }
 
   // Compute summary and trend
-  const summary = computeSummary(deployments, incidents, lookbackDays);
-  const trend = computeTrend(deployments, incidents);
+  const summary = computeSummary(deploymentRecords, incidents, lookbackDays);
+  const trend = computeTrend(deploymentRecords, incidents);
 
   return {
     trend,
-    deployments: deployments.slice(0, 50),
+    deployments: deploymentRecords.slice(0, 50),
     incidents,
     summary,
     source: usedSource,
   };
-}
-
-async function fetchDeployments(
-  octokit: Octokit,
-  owner: string,
-  repo: string,
-  since: Date,
-  environment: string
-): Promise<DeploymentRecord[]> {
-  try {
-    const { data: deploys } = await octokit.rest.repos.listDeployments({
-      owner,
-      repo,
-      environment,
-      per_page: 100,
-    });
-
-    const recentDeploys = deploys.filter(
-      (d) => new Date(d.created_at) >= since
-    );
-
-    // Fetch statuses for each deployment (limit to 50)
-    const deploysToCheck = recentDeploys.slice(0, 50);
-    const statusResults = await Promise.allSettled(
-      deploysToCheck.map((d) =>
-        octokit.rest.repos.listDeploymentStatuses({
-          owner,
-          repo,
-          deployment_id: d.id,
-          per_page: 1,
-        })
-      )
-    );
-
-    return deploysToCheck.map((d, i) => {
-      const statusResult = statusResults[i];
-      let status: DeploymentRecord["status"] = "pending";
-      let logUrl: string | null = null;
-      if (statusResult.status === "fulfilled") {
-        const statuses = statusResult.value.data;
-        if (statuses.length > 0) {
-          const s = statuses[0].state;
-          if (s === "success" || s === "inactive") status = "success"; // inactive = superseded by a newer deploy, still a success
-          else if (s === "failure") status = "failure";
-          else if (s === "error") status = "error";
-          // log_url typically points to the Actions run
-          logUrl = statuses[0].log_url || null;
-        }
-      }
-
-      return {
-        id: String(d.id),
-        environment: d.environment,
-        sha: d.sha,
-        ref: d.ref,
-        createdAt: d.created_at,
-        status,
-        url: logUrl || `https://github.com/${owner}/${repo}/commit/${d.sha}`,
-        creator: d.creator?.login || "unknown",
-        description: d.description || null,
-        causedIncident: false,
-      };
-    });
-  } catch {
-    return [];
-  }
-}
-
-async function fetchReleases(
-  octokit: Octokit,
-  owner: string,
-  repo: string,
-  since: Date
-): Promise<DeploymentRecord[]> {
-  try {
-    const { data: releases } = await octokit.rest.repos.listReleases({
-      owner,
-      repo,
-      per_page: 100,
-    });
-
-    return releases
-      .filter((r) => !r.draft && new Date(r.published_at || r.created_at) >= since)
-      .map((r) => ({
-        id: String(r.id),
-        environment: "production",
-        sha: r.target_commitish,
-        ref: r.tag_name,
-        createdAt: r.published_at || r.created_at,
-        status: "success" as const,
-        url: r.html_url,
-        creator: r.author?.login || "unknown",
-        description: r.name || r.tag_name,
-        causedIncident: false,
-      }));
-  } catch {
-    return [];
-  }
-}
-
-async function fetchMergedPRs(
-  octokit: Octokit,
-  owner: string,
-  repo: string,
-  since: Date
-): Promise<DeploymentRecord[]> {
-  try {
-    // Get the default branch
-    const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
-    const defaultBranch = repoData.default_branch;
-
-    const { data: pulls } = await octokit.rest.pulls.list({
-      owner,
-      repo,
-      state: "closed",
-      base: defaultBranch,
-      sort: "updated",
-      direction: "desc",
-      per_page: 100,
-    });
-
-    return pulls
-      .filter((pr) => pr.merged_at && new Date(pr.merged_at) >= since)
-      .map((pr) => ({
-        id: String(pr.number),
-        environment: "production",
-        sha: pr.merge_commit_sha || "",
-        ref: defaultBranch,
-        createdAt: pr.merged_at!,
-        status: "success" as const,
-        url: pr.html_url,
-        creator: pr.user?.login || "unknown",
-        description: pr.title,
-        causedIncident: false,
-      }));
-  } catch {
-    return [];
-  }
 }
 
 async function fetchIncidents(
@@ -475,7 +379,7 @@ function computeTrend(
 
   for (const d of deployments) {
     const week = getISOWeek(new Date(d.createdAt));
-    const entry = weekMap.get(week) || {
+    const entry = weekMap.get(week) ?? {
       total: 0,
       success: 0,
       failure: 0,
