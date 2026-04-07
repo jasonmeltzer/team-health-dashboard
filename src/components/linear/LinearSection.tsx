@@ -350,7 +350,7 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
                   : data.scopeChanges.midSprintAdded - data.scopeChanges.midSprintRemoved < 0
                   ? "scope reduced"
                   : "on track"}
-                {data.scopeChanges.carryOvers > 0 && ` (+${data.scopeChanges.carryOvers} carried)`}
+                {data.scopeChanges.carryOvers != null && data.scopeChanges.carryOvers > 0 && ` (+${data.scopeChanges.carryOvers} carried)`}
               </span>
             }
             refreshing={refreshing}

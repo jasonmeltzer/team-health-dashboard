@@ -288,11 +288,11 @@ function scoreLinear(linear: LinearMetrics): ScoreDeduction[] {
   });
 
   // 8. Scope carry-overs (0-4 pts, cycles mode only)
-  const carryOvers = scopeChanges?.carryOvers ?? 0;
+  const carryOvers = scopeChanges?.carryOvers;
   let carryOverPts = 0;
   let carryOverDetail = "Continuous mode (not scored)";
 
-  if (isCyclesMode && scopeChanges != null) {
+  if (isCyclesMode && scopeChanges != null && carryOvers != null) {
     const sprintSize = scopeChanges.issueCountNow;
     const carryOverPct = sprintSize > 0 ? (carryOvers / sprintSize) * 100 : 0;
     if (carryOverPct > 30) carryOverPts = 4;
@@ -301,6 +301,8 @@ function scoreLinear(linear: LinearMetrics): ScoreDeduction[] {
     carryOverDetail = sprintSize > 0
       ? `${Math.round(carryOverPct)}% carry-over rate (${carryOvers} of ${sprintSize} issues carried over)`
       : "Empty sprint";
+  } else if (isCyclesMode && scopeChanges != null && carryOvers == null) {
+    carryOverDetail = "Carry-over detection unavailable (past cycle)";
   } else if (isCyclesMode) {
     carryOverDetail = "No scope data available";
   }
@@ -309,7 +311,7 @@ function scoreLinear(linear: LinearMetrics): ScoreDeduction[] {
     signal: "Scope carry-overs",
     category: "linear",
     points: carryOverPts,
-    maxPoints: isCyclesMode && scopeChanges != null && scopeChanges.issueCountNow > 0 ? 4 : 0,
+    maxPoints: isCyclesMode && scopeChanges != null && carryOvers != null && scopeChanges.issueCountNow > 0 ? 4 : 0,
     detail: carryOverDetail,
   });
 

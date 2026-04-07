@@ -198,7 +198,7 @@ ${deductionSummary || "  (none — everything looks healthy)"}`;
       const churnLine = scopeChanges && linear.mode === "cycles" && scopeChanges.issueCountNow > 0
         ? `\n- Scope churn (mid-sprint): ${Math.round(((scopeChanges.midSprintAdded + scopeChanges.midSprintRemoved) / scopeChanges.issueCountNow) * 100)}% (${scopeChanges.midSprintAdded} added, ${scopeChanges.midSprintRemoved} removed)`
         : "";
-      const carryOverLine = scopeChanges && linear.mode === "cycles" && scopeChanges.carryOvers > 0 && scopeChanges.issueCountNow > 0
+      const carryOverLine = scopeChanges && linear.mode === "cycles" && scopeChanges.carryOvers != null && scopeChanges.carryOvers > 0 && scopeChanges.issueCountNow > 0
         ? `\n- Carry-overs: ${scopeChanges.carryOvers} issues (${Math.round((scopeChanges.carryOvers / scopeChanges.issueCountNow) * 100)}% of sprint)`
         : "";
       sections.push(`Linear Sprint Metrics:
@@ -320,7 +320,7 @@ Review bottlenecks: ${JSON.stringify(github.reviewBottlenecks, null, 2)}`);
       const scopeLine = scopeChanges && linear.mode === "cycles" && scopeChanges.issueCountNow > 0
         ? `\nScope churn (mid-sprint): ${Math.round(((scopeChanges.midSprintAdded + scopeChanges.midSprintRemoved) / scopeChanges.issueCountNow) * 100)}% (${scopeChanges.midSprintAdded} added, ${scopeChanges.midSprintRemoved} removed of ${scopeChanges.issueCountNow} issues)`
         : "";
-      const carryOverLine = scopeChanges && linear.mode === "cycles" && scopeChanges.carryOvers > 0 && scopeChanges.issueCountNow > 0
+      const carryOverLine = scopeChanges && linear.mode === "cycles" && scopeChanges.carryOvers != null && scopeChanges.carryOvers > 0 && scopeChanges.issueCountNow > 0
         ? `\nCarry-overs: ${scopeChanges.carryOvers} issues (${Math.round((scopeChanges.carryOvers / scopeChanges.issueCountNow) * 100)}% of sprint)`
         : "";
       sections.push(`Linear Sprint Data:
@@ -497,7 +497,7 @@ function formatLinearRich(linear: LinearMetrics): string {
     }
 
     // Carry-overs section
-    if (carryOvers > 0) {
+    if (carryOvers != null && carryOvers > 0) {
       const carryOverPct = issueCountNow > 0
         ? Math.round((carryOvers / issueCountNow) * 100)
         : 0;

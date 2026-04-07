@@ -105,7 +105,7 @@ export interface ScopeChangeSummary {
   issueCountNow: number;            // current issues.nodes.length
   midSprintAdded: number;    // added count excluding carry-overs
   midSprintRemoved: number;  // removed count (carry-overs can only be "added")
-  carryOvers: number;        // count of isCarryOver === true
+  carryOvers: number | null;  // count of isCarryOver === true; null when detection unavailable (past cycles)
 }
 
 export interface LinearMetrics {

@@ -40,7 +40,7 @@ function makeScopeChanges(overrides: Partial<ScopeChangeSummary> = {}): ScopeCha
     hasColdStartGap: overrides.hasColdStartGap ?? false,
     issueCountAtStart: overrides.issueCountAtStart ?? null,
     issueCountNow: overrides.issueCountNow ?? 10,
-    midSprintAdded: overrides.midSprintAdded ?? (added - carryOvers),
+    midSprintAdded: overrides.midSprintAdded ?? Math.max(0, added - carryOvers),
     midSprintRemoved: overrides.midSprintRemoved ?? removed,
     carryOvers,
     ...overrides,

@@ -92,7 +92,7 @@ export function ScopeChangesCard({ summary }: ScopeChangesCardProps) {
               Scope Changes
             </h3>
             <p className="text-xs text-zinc-500 mt-0.5">
-              ({summary.carryOvers} carry-overs,{" "}
+              ({summary.carryOvers != null ? `${summary.carryOvers} carry-overs` : "carry-overs unknown"},{" "}
               {summary.midSprintAdded + summary.midSprintRemoved} mid-sprint)
             </p>
           </div>
@@ -103,13 +103,13 @@ export function ScopeChangesCard({ summary }: ScopeChangesCardProps) {
             <span
               className={cn(
                 "rounded-full px-2 py-0.5 text-xs font-medium",
-                summary.net > 0
+                summary.midSprintAdded - summary.midSprintRemoved > 0
                   ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                   : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
               )}
             >
-              net {summary.net >= 0 ? "+" : ""}
-              {summary.net}
+              net {summary.midSprintAdded - summary.midSprintRemoved >= 0 ? "+" : ""}
+              {summary.midSprintAdded - summary.midSprintRemoved}
             </span>
           </div>
         </div>
