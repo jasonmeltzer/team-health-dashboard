@@ -49,7 +49,7 @@ async function _fetchGitHubMetrics(
 
   // Read back stored PRs and reviews
   const storedPRs: StoredPR[] = readPRs(owner, repo, { lookbackDays });
-  const storedReviews: StoredReview[] = readReviewsForRepo(owner, repo);
+  const allReviews: StoredReview[] = readReviewsForRepo(owner, repo);
 
   const now = new Date();
   const sinceDate = daysAgo(lookbackDays);
@@ -59,6 +59,12 @@ async function _fetchGitHubMetrics(
   const recentPRs = storedPRs.filter(
     (pr) => new Date(pr.created_at) >= sinceDate
   );
+
+  // Build a set of valid PR IDs for filtering reviews to the lookback window.
+  // readReviewsForRepo returns all reviews in the DB; as the shared DB grows
+  // over months, we only want reviews for PRs in our lookback window.
+  const validPrIds = new Set(storedPRs.map((pr) => `${owner}/${repo}#${pr.number}`));
+  const storedReviews = allReviews.filter((r) => validPrIds.has(r.pr_id));
 
   // Build a map from pr_id -> reviews (sorted by submitted_at asc)
   // pr_id format: "owner/repo#number"
@@ -149,7 +155,8 @@ async function _fetchGitHubMetrics(
     return reviewerMap.get(login)!;
   };
 
-  // Completed reviews from all stored reviews
+  // Completed reviews from all stored reviews (deduplicated: one count per reviewer per PR)
+  const seenReviewerPerPR = new Set<string>();
   for (const review of storedReviews) {
     // Find the PR this review belongs to
     const pr = storedPRs.find((p) => `${owner}/${repo}#${p.number}` === review.pr_id);
@@ -157,6 +164,10 @@ async function _fetchGitHubMetrics(
     // Only count actual review actions (not comments/pending drafts)
     const state = review.state.toUpperCase();
     if (state !== "APPROVED" && state !== "CHANGES_REQUESTED" && state !== "DISMISSED") continue;
+    // Deduplicate: count each reviewer only once per PR
+    const dedupeKey = `${review.pr_id}:${review.reviewer}`;
+    if (seenReviewerPerPR.has(dedupeKey)) continue;
+    seenReviewerPerPR.add(dedupeKey);
 
     const entry = getOrCreate(review.reviewer, review.avatar_url ?? "");
     entry.completedReviews += 1;

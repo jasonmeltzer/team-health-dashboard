@@ -22,8 +22,8 @@ function formatSprintTimeline(summary: LinearMetrics["summary"]): string {
   const start = new Date(summary.currentCycleStartsAt).getTime();
   const end = new Date(summary.currentCycleEndsAt).getTime();
   const totalDays = Math.round((end - start) / (1000 * 60 * 60 * 24));
-  const elapsedDays = Math.max(0, Math.round((now - start) / (1000 * 60 * 60 * 24)));
-  const elapsedPct = totalDays > 0 ? Math.round((elapsedDays / totalDays) * 100) : 0;
+  const elapsedDays = Math.min(totalDays, Math.max(0, Math.round((now - start) / (1000 * 60 * 60 * 24))));
+  const elapsedPct = totalDays > 0 ? Math.min(100, Math.round((elapsedDays / totalDays) * 100)) : 0;
   return `\n- Sprint timeline: day ${elapsedDays} of ${totalDays} (${elapsedPct}% elapsed) — ${summary.currentCycleProgress}% work complete vs ${elapsedPct}% time elapsed`;
 }
 

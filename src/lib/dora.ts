@@ -75,7 +75,8 @@ export async function fetchDORAMetrics(
 
   // Determine which source was actually used (read from stored data IDs)
   // StoredDeployment IDs are prefixed: "owner/repo#deploy-N", "owner/repo#release-N", "owner/repo#merge-N"
-  let usedSource: "deployments" | "releases" | "merges" = "merges";
+  // Fall back to the configured source when no deployments are returned (preserves user's selection)
+  let usedSource: "deployments" | "releases" | "merges" = source === "auto" ? "merges" : source;
   if (storedDeployments.length > 0) {
     const firstId = storedDeployments[0].id;
     if (firstId.includes("#deploy-")) {

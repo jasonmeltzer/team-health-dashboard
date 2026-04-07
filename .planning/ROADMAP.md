@@ -188,3 +188,13 @@ Phases execute in numeric order: 1 -> 1.1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.3 -> 03.4
 ## Backlog
 
 (empty — promoted 999.3 to phase 03.3)
+
+### Phase 6: Integration test app for team-data-core
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 6 to break down)

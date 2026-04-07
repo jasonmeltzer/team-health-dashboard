@@ -133,6 +133,7 @@ None yet.
 - Phase 01.1 inserted after Phase 1: Code Review Fixes (URGENT) — fix 15 issues from full-repo code review (SSRF, scoring bugs, accessibility, cache mismatches)
 - Phase 03.3 inserted after Phase 3: Scope Churn Health Signal & AI Integration — promoted from backlog 999.3
 - Phase 03.4 inserted after Phase 03.3: Scope Change Carry-Over Classification (URGENT) — distinguish cycle carry-overs from true mid-sprint scope creep, exclude from churn scoring
+- Phase 6 added: Integration test app for team-data-core — minimal app to exercise full fetch-store-query cycle end-to-end
 
 ### Blockers/Concerns
 
