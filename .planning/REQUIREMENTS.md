@@ -65,8 +65,8 @@
 - [x] **SDL-04**: Package includes deployment fetch/store/query functions with source auto-detection (deployments/releases/merges)
 - [x] **SDL-05**: Package has unit tests covering DB creation, store/query roundtrips, upsert idempotency, and filtering
 - [x] **SDL-06**: team-health-dashboard refactored to use package for GitHub and DORA data (API route interfaces unchanged)
-- [ ] **SDL-07**: ai-org-copilot updated to read from shared DB via package query functions with correctly mapped columns
-- [ ] **SDL-08**: Integration guide exists documenting setup, API reference, and schema for future consumers
+- [x] **SDL-07**: ai-org-copilot updated to read from shared DB via package query functions with correctly mapped columns
+- [x] **SDL-08**: Integration guide exists documenting setup, API reference, and schema for future consumers
 
 ### Integration
 
@@ -153,8 +153,8 @@
 | SDL-04 | Phase 5 | Complete |
 | SDL-05 | Phase 5 | Complete |
 | SDL-06 | Phase 5 | Complete |
-| SDL-07 | Phase 5 | Pending |
-| SDL-08 | Phase 5 | Pending |
+| SDL-07 | Phase 5 | Complete |
+| SDL-08 | Phase 5 | Complete |
 | INTG-01 | Phase 4 | Pending |
 | INTG-02 | Phase 4 | Pending |
 | INTG-03 | Phase 4 | Pending |

@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed 05-shared-data-layer-04 (dashboard consumes team-data-core)
-last_updated: "2026-04-07T01:56:40.086Z"
+status: Phase complete — ready for verification
+stopped_at: "Checkpoint: Task 2 awaiting user verification of both apps with shared data layer"
+last_updated: "2026-04-07T02:03:55.183Z"
 progress:
   total_phases: 10
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 23
-  completed_plans: 22
+  completed_plans: 23
 ---
 
 # Project State
@@ -67,6 +67,7 @@ Plan: 5 of 5
 | Phase 05-shared-data-layer P02 | 5 | 2 tasks | 6 files |
 | Phase 05-shared-data-layer P03 | 5 | 2 tasks | 7 files |
 | Phase 05-shared-data-layer P04 | 25 | 2 tasks | 5 files |
+| Phase 05 P05 | 25 | 1 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,8 @@ Recent decisions affecting current work:
 - [Phase 05-shared-data-layer]: caused_incident defaults to 0 in package; incident correlation stays in app-layer DORA logic
 - [Phase 05-shared-data-layer]: serverExternalPackages is top-level in Next.js 16 (not under experimental); Turbopack rejects symlinks for packages outside project root — dist must be copied into node_modules directly
 - [Phase 05-shared-data-layer]: requested_reviewers not in StoredPR schema; pendingPRs empty in refactored github.ts — review bottleneck pending bars show 0; follow-up: add requested_reviewers column to shared pull_requests table
+- [Phase 05]: readSharedGitHubData/readSharedLinearData signatures changed from (dbPath) to (repos[], dbPath) for explicit filtering; route callers pass [] to read all repos
+- [Phase 05]: Team.repos set to [] in mapStoredTeamToTeam — repo mapping is app-specific, not in shared schema
 
 ### Pending Todos
 
@@ -144,6 +147,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T01:56:40.083Z
-Stopped at: Completed 05-shared-data-layer-04 (dashboard consumes team-data-core)
+Last session: 2026-04-07T02:03:55.180Z
+Stopped at: Checkpoint: Task 2 awaiting user verification of both apps with shared data layer
 Resume file: None

@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 2: Persistence & Resilience** - Add SQLite snapshot storage, historical trend charts, caching improvements, and rate-limit resilience
 - [ ] **Phase 3: Scoring Transparency & Onboarding** - Surface per-signal score breakdowns, customizable weights, and a first-run setup wizard
 - [ ] **Phase 4: OAuth & Slack Verification** - Add OAuth auth flows for all three integrations and verify Slack with a live workspace
-- [ ] **Phase 5: Shared Data Layer** - Extract GitHub/Linear data fetching and SQLite storage into a reusable npm package for cross-project data sharing
+- [x] **Phase 5: Shared Data Layer** - Extract GitHub/Linear data fetching and SQLite storage into a reusable npm package for cross-project data sharing (completed 2026-04-07)
 
 ## Phase Details
 
@@ -158,14 +158,14 @@ Plans:
   5. This dashboard continues to work after the refactor, using the shared package for GitHub and DORA data
   6. ai-org-copilot reads from the shared DB via package query functions with updated column mappings
   7. Integration guide exists for future consumers
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 - [x] 05-01-PLAN.md — Package foundation: repo init, types, DB singleton, schema, tsup build
 - [x] 05-02-PLAN.md — GitHub fetch/store/query module + tests
 - [x] 05-03-PLAN.md — Linear + DORA fetch/store/query modules + tests
 - [x] 05-04-PLAN.md — Refactor team-health-dashboard to consume package (GitHub + DORA paths)
-- [ ] 05-05-PLAN.md — Wire ai-org-copilot, integration guide, end-to-end verification
+- [x] 05-05-PLAN.md — Wire ai-org-copilot, integration guide, end-to-end verification
 
 ## Progress
 
@@ -182,7 +182,7 @@ Phases execute in numeric order: 1 -> 1.1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.3 -> 03.4
 | 3.2 Sprint Scope Tracking (INSERTED) | 2/2 | Complete |  |
 | 3.3 Scope Churn & AI (INSERTED) | 2/2 | Complete   | 2026-04-04 |
 | 03.4 Carry-Over Classification (INSERTED) | 2/2 | Complete    | 2026-04-06 |
-| 5. Shared Data Layer | 4/5 | In Progress|  |
+| 5. Shared Data Layer | 5/5 | Complete   | 2026-04-07 |
 | 4. OAuth & Slack Verification | 0/? | Not started | - |
 
 ## Backlog
