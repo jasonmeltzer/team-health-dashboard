@@ -99,7 +99,7 @@ Starts at 100, subtracts points for signals of trouble. Only scores against conn
 - **WIP per person** (0-4): avg in-progress per person. >7 = -4, >5 = -2, >3 = -1
 - **Long-running items** (0-4): % of active issues past p90. >20% = -4, >15% = -3, >10% = -2, >5% = -1
 - **Scope churn** (0-4, cycles mode only): (midSprintAdded + midSprintRemoved) / sprintSize. >30% = -4, >20% = -2, >10% = -1. maxPoints=0 in weekly mode or when scope data unavailable. Excludes carry-overs.
-- **Scope carry-overs** (0-4, cycles mode only): carryOvers / sprintSize. >30% = -4, >20% = -2, >10% = -1. maxPoints=0 in weekly mode or when scope data unavailable.
+- **Scope carry-overs** (0-4, cycles mode only): carryOvers / sprintSize. >30% = -4, >20% = -2, >10% = -1. maxPoints=0 in weekly mode, when scope data unavailable, or when carryOvers is null (past cycles where detection wasn't performed).
 
 ### Slack signals (max 20 pts)
 - **Response time** (0-8): avg response minutes. >60m = -8, >30m = -6, >15m = -4, >5m = -2

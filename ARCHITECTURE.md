@@ -268,7 +268,7 @@ Each scope change is classified using two heuristics:
 1. **History-based** (`source: "history"`): `isCarryOver = true` when the change is within ±12h of cycle start AND `fromCycleId === previousCycleId`
 2. **Snapshot-based** (`source: "snapshot"`): `isCarryOver = true` when the change is within ±12h of cycle start (no cycle ID available from snapshots)
 
-Removals are never carry-overs. The `ScopeChangeSummary` provides derived counts: `midSprintAdded` (excludes carry-overs), `midSprintRemoved`, and `carryOvers`.
+Removals are never carry-overs. The `ScopeChangeSummary` provides derived counts: `midSprintAdded` (excludes carry-overs), `midSprintRemoved`, and `carryOvers` (`number | null` — null for past cycles where detection wasn't performed). The `previousCycleId` is derived from the full unfiltered cycle list (not the lookback-filtered list) so carry-over detection works even when the lookback window is shorter than the sprint length.
 
 ### Persistence
 
@@ -294,8 +294,8 @@ When the earliest snapshot for a cycle postdates the cycle's `startsAt`, a warni
 
 ### UI Components
 
-- **ScopeChangesCard** (`src/components/linear/ScopeChangesCard.tsx`) — two independently collapsible sections: "Carry-overs (N)" (collapsed by default, muted opacity styling) and "Mid-sprint changes (M)" (expanded by default, normal styling). Each section lists changes chronologically with green/red +/− indicators, Linear issue links, actor names, relative timestamps, and removal destinations. Header shows breakdown sub-line: "(N carry-overs, M mid-sprint)".
-- **Scope Change MetricCard** — in LinearSection summary row (5th card), shows mid-sprint net only (excluding carry-overs). Amber "scope grew" label when mid-sprint net > 0, with "(+N carried)" hint when carry-overs exist. Scrolls to `#scope-changes`.
+- **ScopeChangesCard** (`src/components/linear/ScopeChangesCard.tsx`) — two independently collapsible sections: "Carry-overs (N)" (collapsed by default, muted opacity styling) and "Mid-sprint changes (M)" (expanded by default, normal styling). Each section lists changes chronologically with green/red +/− indicators, Linear issue links, actor names, relative timestamps, and removal destinations. Header shows breakdown sub-line and net badge based on mid-sprint counts only. For past cycles where carry-over detection is unavailable, shows "carry-overs unknown".
+- **Scope Change MetricCard** — in LinearSection summary row (5th card), shows mid-sprint net only (excluding carry-overs). Amber "scope grew" label when mid-sprint net > 0, with "(+N carried)" hint when carry-overs are detected. Scrolls to `#scope-changes`.
 
 ### Code
 
