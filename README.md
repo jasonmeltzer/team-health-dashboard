@@ -32,7 +32,7 @@ On top of the deterministic score, an optional AI layer (Claude or a local Ollam
 
 **AI-generated narrative.** The LLM doesn't compute the score — it reads the score and the underlying data and writes the kind of summary you'd write yourself if you had 20 minutes and all the data in front of you. Trends, patterns, specific recommendations, all in plain English.
 
-**Zero infrastructure.** No database, no cron jobs, no data pipeline. Install, configure API tokens, and you have a live dashboard. Data is fetched on-demand from source APIs. Deploy it to Vercel in one command or run it locally.
+**Zero infrastructure.** No heavy database, no cron jobs, no data pipeline. Install, configure API tokens, and you have a live dashboard. Integration data is fetched on-demand and stored in a shared SQLite database (`team-data-core`) so that other engineering tools can read the same data without re-fetching. Run it locally or deploy to any Node.js host.
 
 **Incremental adoption.** Every integration is optional. Start with just GitHub. Add Linear when you're ready. Skip Slack if you don't need it. The dashboard gracefully degrades — unconfigured sections show helpful placeholders explaining what they'd provide and how to enable them. The health score automatically adjusts to only score against connected sources.
 
@@ -73,7 +73,7 @@ On top of the deterministic score, an optional AI layer (Claude or a local Ollam
 | Slack | @slack/web-api |
 | Persistence | better-sqlite3 (WAL mode, file-based) |
 
-Health score snapshots are stored in SQLite (`data/health.db`) for trend charts. All integration data is still fetched on-demand from APIs.
+Health score snapshots are stored in SQLite (`data/health.db`) for trend charts. Integration data (PRs, reviews, deployments) is fetched on-demand and stored in a shared SQLite database via `team-data-core` (`~/.local/share/team-data/data.db`), enabling other engineering tools to read the same data.
 
 ## Architecture
 
@@ -194,7 +194,8 @@ src/
 
 ## Design Decisions
 
-- **Lightweight persistence**: SQLite (`better-sqlite3`, WAL mode) stores daily health score snapshots for trend charts. No migrations framework — schema is created on first access. All integration data is still fetched on-demand from source APIs.
+- **Lightweight persistence**: SQLite (`better-sqlite3`, WAL mode) stores daily health score snapshots for trend charts. No migrations framework — schema is created on first access.
+- **Shared data layer**: Integration data (GitHub PRs, reviews, deployments) is fetched via `team-data-core` and stored in a shared SQLite database (`~/.local/share/team-data/data.db`). Other tools (e.g., `ai-org-copilot`) can read from the same database without re-fetching from APIs. Configure the path via `TEAM_DATA_DB` env var.
 - **No Linear SDK**: uses raw GraphQL fetch to keep dependencies minimal and queries transparent.
 - **Client-side data fetching**: each dashboard section loads independently, so slower sources (Slack, Claude) don't block the page.
 - **Pluggable AI**: defaults to Ollama (free, local). Anthropic/Claude is available for higher quality with richer prompts. Manual mode lets you use any AI chat (ChatGPT, Claude, Gemini) with no API key — download a prompt file, upload it to any AI, then drag-and-drop the AI's response file back into the dashboard.

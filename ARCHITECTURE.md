@@ -4,15 +4,15 @@
 
 ## Overview
 
-Team Health Dashboard is a Next.js 16 application that aggregates engineering metrics from GitHub, Linear, and Slack, computes a deterministic health score, and optionally generates AI-powered narrative insights. Health score snapshots are persisted in SQLite for historical trending. Integration data is fetched on-demand from source APIs.
+Team Health Dashboard is a Next.js 16 application that aggregates engineering metrics from GitHub, Linear, and Slack, computes a deterministic health score, and optionally generates AI-powered narrative insights. Health score snapshots are persisted in SQLite for historical trending. GitHub and DORA integration data is fetched via `team-data-core` and stored in a shared SQLite database so other tools can read the same data.
 
 ### Tech Stack
 
 - **Next.js 16** (App Router) + **TypeScript** + **React 19**
 - **Tailwind CSS** with class-based dark/light mode
 - **Recharts 3** for charts
-- **Octokit** for GitHub REST API (paginated with early termination)
-- **Raw GraphQL fetch** for Linear API (no SDK)
+- **team-data-core** for shared GitHub/deployment data fetching and storage
+- **Raw GraphQL fetch** for Linear API (no SDK, stays in-app due to scope change detection complexity)
 - **@slack/web-api** for Slack API
 - **Anthropic SDK**, **Ollama**, or **Manual** (any AI chat) for AI analysis
 - **better-sqlite3** for health score snapshot persistence (WAL mode, file-based)
@@ -129,6 +129,29 @@ src/
     ├── dora.ts                         # DORA types
     └── metrics.ts                      # Health score + narrative types
 ```
+
+---
+
+## Shared Data Layer
+
+GitHub and DORA data flows through the `team-data-core` package:
+
+```
+API Route (e.g., /api/github)
+  → fetchAndStorePRs(token, owner, repo)     # team-data-core: fetch from GitHub API
+    → Shared SQLite DB (~/.local/share/team-data/data.db)
+  → readPRs(owner, repo, { lookbackDays })   # team-data-core: query stored data
+  → Metrics computation (stays in app)        # lib/github.ts: cycle time, bottlenecks, etc.
+  → Return PRMetrics to client
+```
+
+**What's shared (via team-data-core):** PR fetching/storage, review fetching/storage, deployment fetching/storage with source auto-detection.
+
+**What stays in-app:** Metrics computation (cycle time, review bottlenecks, stale PR detection), DORA metrics (frequency, CFR, MTTR), incident correlation (writes `caused_incident` back to shared DB), Linear data fetching (scope change detection is too tightly coupled), health scoring, AI prompts, caching.
+
+**Linear exception:** Linear data fetching remains in `lib/linear.ts` because scope change detection depends on cycle history API calls and snapshot diffing that don't fit the shared fetch-store-query pattern.
+
+The shared DB path is configurable via `TEAM_DATA_DB` env var (default: `~/.local/share/team-data/data.db`).
 
 ---
 
