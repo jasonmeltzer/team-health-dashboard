@@ -500,6 +500,8 @@ async function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 4
     summary: {
       currentCycleName: currentName,
       currentCycleProgress: currentSummary?.progress ?? 0,
+      currentCycleStartsAt: currentCycle?.startsAt ?? null,
+      currentCycleEndsAt: currentCycle?.endsAt ?? null,
       totalActiveIssues: currentSummary?.activeIssues ?? 0,
       stalledIssueCount: currentSummary?.stalledCount ?? 0,
       avgVelocity,
@@ -599,6 +601,8 @@ async function buildContinuousMetrics(teamId: string, lookbackDays: number = 42)
     summary: {
       currentCycleName: "Continuous flow",
       currentCycleProgress: 0,
+      currentCycleStartsAt: null,
+      currentCycleEndsAt: null,
       totalActiveIssues: activeIssues.length,
       stalledIssueCount: stalledIssues.length,
       avgVelocity: avgThroughput,

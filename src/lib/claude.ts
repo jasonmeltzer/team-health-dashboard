@@ -15,6 +15,18 @@ export class OllamaNotRunningError extends Error {
   }
 }
 
+/** Format sprint timeline context so the LLM knows where the team is in the sprint. */
+function formatSprintTimeline(summary: LinearMetrics["summary"]): string {
+  if (!summary.currentCycleStartsAt || !summary.currentCycleEndsAt) return "";
+  const now = Date.now();
+  const start = new Date(summary.currentCycleStartsAt).getTime();
+  const end = new Date(summary.currentCycleEndsAt).getTime();
+  const totalDays = Math.round((end - start) / (1000 * 60 * 60 * 24));
+  const elapsedDays = Math.max(0, Math.round((now - start) / (1000 * 60 * 60 * 24)));
+  const elapsedPct = totalDays > 0 ? Math.round((elapsedDays / totalDays) * 100) : 0;
+  return `\n- Sprint timeline: day ${elapsedDays} of ${totalDays} (${elapsedPct}% elapsed) — ${summary.currentCycleProgress}% work complete vs ${elapsedPct}% time elapsed`;
+}
+
 /** Normalize smart quotes and other copy-paste artifacts that break JSON parsing. */
 export function normalizeQuotes(text: string): string {
   return text
@@ -176,6 +188,7 @@ Rules:
 - recommendations: 2-3 actionable strings. Be specific about what to do.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}. Do not reference, speculate about, or suggest configuring these.` : ""}
 - Focus your insights on the signals that scored poorly (shown below).
+- When discussing sprint progress: compare "% work complete" vs "% time elapsed". If work complete >= time elapsed, the team is on track or ahead — do NOT flag this as a concern. Only flag sprint progress as concerning when work complete is significantly behind time elapsed (e.g., 20% complete at 50% elapsed).
 - When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.
 - When discussing carry-overs: <10% acknowledge as healthy sprint-over-sprint completion; 10-20% note neutrally as moderate inherited backlog; >20% flag as planning concern — team may be over-committing or under-completing.
 
@@ -201,8 +214,9 @@ ${deductionSummary || "  (none — everything looks healthy)"}`;
       const carryOverLine = scopeChanges && linear.mode === "cycles" && scopeChanges.carryOvers != null && scopeChanges.carryOvers > 0 && scopeChanges.issueCountNow > 0
         ? `\n- Carry-overs: ${scopeChanges.carryOvers} issues (${Math.round((scopeChanges.carryOvers / scopeChanges.issueCountNow) * 100)}% of sprint)`
         : "";
+      const timelineLine = formatSprintTimeline(linear.summary);
       sections.push(`Linear Sprint Metrics:
-- Current cycle: ${linear.summary.currentCycleName} (${linear.summary.currentCycleProgress}% complete)
+- Current cycle: ${linear.summary.currentCycleName} (${linear.summary.currentCycleProgress}% complete)${timelineLine}
 - Active issues: ${linear.summary.totalActiveIssues}
 - Stalled issues (>5 days no update): ${linear.summary.stalledIssueCount}
 - Average velocity: ${linear.summary.avgVelocity} points/cycle
@@ -303,6 +317,7 @@ Rules:
 - Focus on what changed, what's at risk, and what to do about it. Skip generic advice.
 - The tone should be like a sharp engineering manager's weekly update to their skip-level.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}. Do not reference, speculate about, or suggest configuring these.` : ""}
+- When discussing sprint progress: compare "% work complete" vs "% time elapsed". If work complete >= time elapsed, the team is on track or ahead — do NOT flag this as a concern. Only flag sprint progress as concerning when work complete is significantly behind time elapsed (e.g., 20% complete at 50% elapsed).
 - When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.
 - When discussing carry-overs: <10% acknowledge as healthy sprint-over-sprint completion; 10-20% note neutrally as moderate inherited backlog; >20% flag as planning concern — team may be over-committing or under-completing.`;
 
@@ -323,7 +338,9 @@ Review bottlenecks: ${JSON.stringify(github.reviewBottlenecks, null, 2)}`);
       const carryOverLine = scopeChanges && linear.mode === "cycles" && scopeChanges.carryOvers != null && scopeChanges.carryOvers > 0 && scopeChanges.issueCountNow > 0
         ? `\nCarry-overs: ${scopeChanges.carryOvers} issues (${Math.round((scopeChanges.carryOvers / scopeChanges.issueCountNow) * 100)}% of sprint)`
         : "";
+      const narrativeTimelineLine = formatSprintTimeline(linear.summary);
       sections.push(`Linear Sprint Data:
+Current cycle: ${linear.summary.currentCycleName} (${linear.summary.currentCycleProgress}% complete)${narrativeTimelineLine}
 Velocity trend: ${JSON.stringify(linear.velocityTrend, null, 2)}
 Stalled issues: ${JSON.stringify(linear.stalledIssues, null, 2)}
 Workload: ${JSON.stringify(linear.workloadDistribution, null, 2)}${scopeLine}${carryOverLine}`);
@@ -431,7 +448,8 @@ function formatLinearRich(linear: LinearMetrics): string {
 
   lines.push(`### Summary`);
   lines.push(`- Mode: ${linear.mode}`);
-  lines.push(`- Current cycle: ${linear.summary.currentCycleName} (${linear.summary.currentCycleProgress}% complete)`);
+  const richTimelineLine = formatSprintTimeline(linear.summary);
+  lines.push(`- Current cycle: ${linear.summary.currentCycleName} (${linear.summary.currentCycleProgress}% complete)${richTimelineLine}`);
   lines.push(`- Active issues: ${linear.summary.totalActiveIssues}`);
   lines.push(`- Stalled issues (>5d no update): ${linear.summary.stalledIssueCount}`);
   lines.push(`- Average velocity: ${linear.summary.avgVelocity} points/cycle`);
@@ -650,6 +668,7 @@ You are an engineering team health analyst. Analyze the metrics data below and r
 
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention at all): ${notConnected.join(", ")}.` : ""}
 - Focus your insights on the signals that scored poorly (see score breakdown below).
+- When discussing sprint progress: compare "% work complete" vs "% time elapsed". If work complete >= time elapsed, the team is on track or ahead — do NOT flag this as a concern. Only flag sprint progress as concerning when work complete is significantly behind time elapsed.
 - Name specific people, PRs, or issues when the data supports it.
 - Be direct — an engineering manager is reading this, not a general audience.
 
@@ -723,6 +742,7 @@ You may use **bold** for emphasis and markdown headers (## Section) to organize 
 - Focus on: what changed, what's at risk, and what to do about it.
 - The tone should be like a sharp engineering manager's weekly update to their skip-level.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention at all): ${notConnected.join(", ")}.` : ""}
+- When discussing sprint progress: compare "% work complete" vs "% time elapsed". If work complete >= time elapsed, the team is on track or ahead — do NOT flag this as a concern. Only flag sprint progress as concerning when work complete is significantly behind time elapsed.
 - Skip generic advice like "improve communication" or "monitor velocity."
 
 ---
@@ -772,6 +792,7 @@ Rules:
 - recommendations: 2-3 actionable strings. Be specific about what to do and who should do it.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}.` : ""}
 - Focus your insights on the signals that scored poorly.
+- When discussing sprint progress: compare "% work complete" vs "% time elapsed". If work complete >= time elapsed, the team is on track or ahead — do NOT flag this as a concern. Only flag sprint progress as concerning when work complete is significantly behind time elapsed (e.g., 20% complete at 50% elapsed).
 - When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.
 - When discussing carry-overs: <10% acknowledge as healthy sprint-over-sprint completion; 10-20% note neutrally as moderate inherited backlog; >20% flag as planning concern — team may be over-committing or under-completing.
 
@@ -811,6 +832,7 @@ Rules:
 - Focus on what changed, what's at risk, and what to do about it. Skip generic advice.
 - The tone should be like a sharp engineering manager's weekly update to their skip-level.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}.` : ""}
+- When discussing sprint progress: compare "% work complete" vs "% time elapsed". If work complete >= time elapsed, the team is on track or ahead — do NOT flag this as a concern. Only flag sprint progress as concerning when work complete is significantly behind time elapsed (e.g., 20% complete at 50% elapsed).
 - When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.
 - When discussing carry-overs: <10% acknowledge as healthy sprint-over-sprint completion; 10-20% note neutrally as moderate inherited backlog; >20% flag as planning concern — team may be over-committing or under-completing.`;
 

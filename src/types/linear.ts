@@ -122,6 +122,8 @@ export interface LinearMetrics {
   summary: {
     currentCycleName: string;
     currentCycleProgress: number;
+    currentCycleStartsAt: string | null;
+    currentCycleEndsAt: string | null;
     totalActiveIssues: number;
     stalledIssueCount: number;
     avgVelocity: number;

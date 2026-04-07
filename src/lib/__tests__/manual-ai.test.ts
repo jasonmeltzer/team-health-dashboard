@@ -71,6 +71,8 @@ function makeLinear(): LinearMetrics {
     summary: {
       currentCycleName: "Continuous",
       currentCycleProgress: 0,
+      currentCycleStartsAt: null,
+      currentCycleEndsAt: null,
       totalActiveIssues: 10,
       stalledIssueCount: 2,
       avgVelocity: 20,

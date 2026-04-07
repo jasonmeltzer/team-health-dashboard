@@ -64,6 +64,8 @@ function makeLinear(overrides: Partial<{
     summary: {
       currentCycleName: "Continuous",
       currentCycleProgress: 0,
+      currentCycleStartsAt: null,
+      currentCycleEndsAt: null,
       totalActiveIssues: 10,
       stalledIssueCount: overrides.stalledIssueCount ?? 0,
       avgVelocity: 20,
