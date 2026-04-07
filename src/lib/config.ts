@@ -55,7 +55,7 @@ export function getConfigStatus(): Record<string, boolean | string | Record<stri
     github: githubConfigured,
     linear: !!(getConfig("LINEAR_API_KEY") && getConfig("LINEAR_TEAM_ID")),
     slack: !!(getConfig("SLACK_BOT_TOKEN") && getConfig("SLACK_CHANNEL_IDS")),
-    ai: aiProvider === "manual" || !!getConfig("ANTHROPIC_API_KEY") || (aiProvider === "ollama" && !!getConfig("AI_PROVIDER")),
+    ai: aiProvider === "manual" || !!getConfig("ANTHROPIC_API_KEY") || aiProvider === "ollama",
     aiProvider,
     dora: githubConfigured,
     cacheTtl: {
