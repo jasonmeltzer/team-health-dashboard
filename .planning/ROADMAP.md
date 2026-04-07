@@ -158,13 +158,13 @@ Plans:
   5. This dashboard continues to work after the refactor, using the shared package for GitHub and DORA data
   6. ai-org-copilot reads from the shared DB via package query functions with updated column mappings
   7. Integration guide exists for future consumers
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 - [x] 05-01-PLAN.md — Package foundation: repo init, types, DB singleton, schema, tsup build
 - [x] 05-02-PLAN.md — GitHub fetch/store/query module + tests
 - [x] 05-03-PLAN.md — Linear + DORA fetch/store/query modules + tests
-- [ ] 05-04-PLAN.md — Refactor team-health-dashboard to consume package (GitHub + DORA paths)
+- [x] 05-04-PLAN.md — Refactor team-health-dashboard to consume package (GitHub + DORA paths)
 - [ ] 05-05-PLAN.md — Wire ai-org-copilot, integration guide, end-to-end verification
 
 ## Progress
@@ -182,7 +182,7 @@ Phases execute in numeric order: 1 -> 1.1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.3 -> 03.4
 | 3.2 Sprint Scope Tracking (INSERTED) | 2/2 | Complete |  |
 | 3.3 Scope Churn & AI (INSERTED) | 2/2 | Complete   | 2026-04-04 |
 | 03.4 Carry-Over Classification (INSERTED) | 2/2 | Complete    | 2026-04-06 |
-| 5. Shared Data Layer | 3/5 | In Progress|  |
+| 5. Shared Data Layer | 4/5 | In Progress|  |
 | 4. OAuth & Slack Verification | 0/? | Not started | - |
 
 ## Backlog

@@ -64,7 +64,7 @@
 - [x] **SDL-03**: Package includes Linear issue/cycle/team fetch/store/query functions with GraphQL cursor pagination
 - [x] **SDL-04**: Package includes deployment fetch/store/query functions with source auto-detection (deployments/releases/merges)
 - [x] **SDL-05**: Package has unit tests covering DB creation, store/query roundtrips, upsert idempotency, and filtering
-- [ ] **SDL-06**: team-health-dashboard refactored to use package for GitHub and DORA data (API route interfaces unchanged)
+- [x] **SDL-06**: team-health-dashboard refactored to use package for GitHub and DORA data (API route interfaces unchanged)
 - [ ] **SDL-07**: ai-org-copilot updated to read from shared DB via package query functions with correctly mapped columns
 - [ ] **SDL-08**: Integration guide exists documenting setup, API reference, and schema for future consumers
 
@@ -152,7 +152,7 @@
 | SDL-03 | Phase 5 | Complete |
 | SDL-04 | Phase 5 | Complete |
 | SDL-05 | Phase 5 | Complete |
-| SDL-06 | Phase 5 | Pending |
+| SDL-06 | Phase 5 | Complete |
 | SDL-07 | Phase 5 | Pending |
 | SDL-08 | Phase 5 | Pending |
 | INTG-01 | Phase 4 | Pending |

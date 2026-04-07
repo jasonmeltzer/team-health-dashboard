@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 05-shared-data-layer-03 (Linear + deployment modules)
-last_updated: "2026-04-07T01:44:09.031Z"
+stopped_at: Completed 05-shared-data-layer-04 (dashboard consumes team-data-core)
+last_updated: "2026-04-07T01:56:40.086Z"
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 23
-  completed_plans: 21
+  completed_plans: 22
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 ## Current Position
 
 Phase: 05 (shared-data-layer) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Plan: 4 of 5
 | Phase 05-shared-data-layer P01 | 2 | 2 tasks | 10 files |
 | Phase 05-shared-data-layer P02 | 5 | 2 tasks | 6 files |
 | Phase 05-shared-data-layer P03 | 5 | 2 tasks | 7 files |
+| Phase 05-shared-data-layer P04 | 25 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -116,6 +117,8 @@ Recent decisions affecting current work:
 - [Phase 05-shared-data-layer]: Extracted IssueQueryResult interface from inline generic to resolve TS7022 implicit any in while-loop
 - [Phase 05-shared-data-layer]: Deployment IDs prefixed with owner/repo#source-type for cross-repo uniqueness in shared deployments table
 - [Phase 05-shared-data-layer]: caused_incident defaults to 0 in package; incident correlation stays in app-layer DORA logic
+- [Phase 05-shared-data-layer]: serverExternalPackages is top-level in Next.js 16 (not under experimental); Turbopack rejects symlinks for packages outside project root — dist must be copied into node_modules directly
+- [Phase 05-shared-data-layer]: requested_reviewers not in StoredPR schema; pendingPRs empty in refactored github.ts — review bottleneck pending bars show 0; follow-up: add requested_reviewers column to shared pull_requests table
 
 ### Pending Todos
 
@@ -141,6 +144,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T01:44:09.028Z
-Stopped at: Completed 05-shared-data-layer-03 (Linear + deployment modules)
+Last session: 2026-04-07T01:56:40.083Z
+Stopped at: Completed 05-shared-data-layer-04 (dashboard consumes team-data-core)
 Resume file: None
