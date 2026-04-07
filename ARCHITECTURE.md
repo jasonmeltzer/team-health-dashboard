@@ -1,6 +1,6 @@
 # Architecture
 
-> Last updated: 2026-04-03. Update this document when making structural changes.
+> Last updated: 2026-04-06. Update this document when making structural changes.
 
 ## Overview
 
@@ -197,7 +197,7 @@ The health score is **deterministic** — same data always produces the same sco
 | Category | Max Points | Signals |
 |----------|-----------|---------|
 | **GitHub** | 30 | Cycle time (8), stale PRs (8), review queue (7), cycle time trend (7) |
-| **Linear** | 34 | Stalled issues (6), workload imbalance (6), velocity trend (6), flow efficiency (4), WIP per person (4), long-running items (4), scope churn (4, cycles only) |
+| **Linear** | 38 | Stalled issues (6), workload imbalance (6), velocity trend (6), flow efficiency (4), WIP per person (4), long-running items (4), scope churn (4, cycles only), scope carry-overs (4, cycles only) |
 | **Slack** | 20 | Response time (8), overloaded members (6), response time trend (6) |
 | **DORA** | 20 | Deploy frequency (5), lead time (5), change failure rate (5), MTTR (5) |
 
@@ -252,7 +252,7 @@ Incidents are correlated to deployments via a **24-hour time proximity window**.
 
 ### Overview
 
-Tracks issues added and removed from Linear cycles mid-sprint, with actor attribution and timestamps. Only active in cycles mode — hidden in weekly/continuous flow mode. Controlled by the same cycle picker as other per-cycle sections (Workload, Stalled Issues, Time in State).
+Tracks issues added and removed from Linear cycles mid-sprint, with actor attribution and timestamps. Classifies each scope change as either a **carry-over** (inherited from previous cycle within ±12h of sprint start) or a **mid-sprint change** (true scope creep). Only active in cycles mode — hidden in weekly/continuous flow mode. Controlled by the same cycle picker as other per-cycle sections (Workload, Stalled Issues, Time in State).
 
 ### Data Sources
 
@@ -260,6 +260,15 @@ Tracks issues added and removed from Linear cycles mid-sprint, with actor attrib
 2. **SQLite cycle snapshots** — `cycle_snapshots` table stores issue ID lists per cycle on each fetch. Diff between consecutive snapshots catches changes that IssueHistory may miss. Snapshot-sourced entries show "?" for actor (no attribution available).
 
 Changes before the cycle's `startsAt` are filtered out (sprint planning is not scope change).
+
+### Carry-Over Classification
+
+Each scope change is classified using two heuristics:
+
+1. **History-based** (`source: "history"`): `isCarryOver = true` when the change is within ±12h of cycle start AND `fromCycleId === previousCycleId`
+2. **Snapshot-based** (`source: "snapshot"`): `isCarryOver = true` when the change is within ±12h of cycle start (no cycle ID available from snapshots)
+
+Removals are never carry-overs. The `ScopeChangeSummary` provides derived counts: `midSprintAdded` (excludes carry-overs), `midSprintRemoved`, and `carryOvers` (`number | null` — null for past cycles where detection wasn't performed). The `previousCycleId` is derived from the full unfiltered cycle list (not the lookback-filtered list) so carry-over detection works even when the lookback window is shorter than the sprint length.
 
 ### Persistence
 
@@ -285,14 +294,14 @@ When the earliest snapshot for a cycle postdates the cycle's `startsAt`, a warni
 
 ### UI Components
 
-- **ScopeChangesCard** (`src/components/linear/ScopeChangesCard.tsx`) — collapsible card with header counts (+N added, −N removed, net ±N with amber badge when positive). Expands to chronological list with green/red +/− indicators, Linear issue links, actor names, relative timestamps, and removal destinations.
-- **Scope Change MetricCard** — in LinearSection summary row (5th card), amber "scope grew" label when net > 0, scrolls to `#scope-changes`.
+- **ScopeChangesCard** (`src/components/linear/ScopeChangesCard.tsx`) — two independently collapsible sections: "Carry-overs (N)" (collapsed by default, muted opacity styling) and "Mid-sprint changes (M)" (expanded by default, normal styling). Each section lists changes chronologically with green/red +/− indicators, Linear issue links, actor names, relative timestamps, and removal destinations. Header shows breakdown sub-line and net badge based on mid-sprint counts only. For past cycles where carry-over detection is unavailable, shows "carry-overs unknown".
+- **Scope Change MetricCard** — in LinearSection summary row (5th card), shows mid-sprint net only (excluding carry-overs). Amber "scope grew" label when mid-sprint net > 0, with "(+N carried)" hint when carry-overs are detected. Scrolls to `#scope-changes`.
 
 ### Code
 
-- `src/types/linear.ts` — `ScopeChange`, `ScopeChangeSummary` interfaces; `scopeChanges` and `scopeChangesByCycle` on `LinearMetrics`
+- `src/types/linear.ts` — `ScopeChange` (with `isCarryOver` flag), `ScopeChangeSummary` (with `midSprintAdded`, `midSprintRemoved`, `carryOvers`); `scopeChanges` and `scopeChangesByCycle` on `LinearMetrics`
 - `src/lib/db.ts` — `writeCycleSnapshot()`, `getLatestCycleSnapshot()`, `getEarliestCycleSnapshot()`, `diffSnapshots()`
-- `src/lib/linear.ts` — `fetchScopeChanges()`, `fetchCycleHistoryForIssue()` (internal)
+- `src/lib/linear.ts` — `fetchScopeChanges(currentCycle, allIssueIds, issueMap, previousCycleId)`, `fetchCycleHistoryForIssue()` (internal)
 
 ---
 
@@ -310,8 +319,8 @@ Auto-detected: if `ANTHROPIC_API_KEY` is set, uses Anthropic. Otherwise defaults
 
 ### Provider-Aware Prompts
 
-- **Compact** (Ollama): Summary-level data, JSON mode enforced, temperature 0, defensive JSON extraction
-- **Rich** (Anthropic + Manual export): Individual PRs/issues with details, per-person stats, trend breakdowns, higher max tokens. Shared prompt builder code.
+- **Compact** (Ollama): Summary-level data, JSON mode enforced, temperature 0, defensive JSON extraction. Includes separate scope churn (mid-sprint) and carry-over summary lines.
+- **Rich** (Anthropic + Manual export): Individual PRs/issues with details, per-person stats, trend breakdowns, higher max tokens. Scope churn and carry-overs rendered as separate `### Scope Churn (Mid-Sprint)` and `### Carry-Overs (From Previous Cycle)` sections with individual issue lists. Shared prompt builder code.
 
 ### AI Endpoints
 

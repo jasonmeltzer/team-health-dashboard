@@ -41,7 +41,7 @@ On top of the deterministic score, an optional AI layer (Claude or a local Ollam
 - **Deterministic health score** (0-100) with transparent, explainable deductions across all connected sources
 - **AI-generated insights and recommendations** powered by Claude or a local Ollama model
 - **GitHub PR metrics**: cycle time trends, review bottlenecks, stale PRs, open PR tracking
-- **Linear sprint metrics**: velocity/throughput trends, stalled issues, workload distribution per assignee, sprint scope change tracking with scope churn health signal (cycles mode)
+- **Linear sprint metrics**: velocity/throughput trends, stalled issues, workload distribution per assignee, sprint scope change tracking with carry-over vs mid-sprint classification, scope churn and carry-over health signals (cycles mode)
 - **Time-in-state deep dive** (7 tabbed views): summary stats, current WIP age, outlier issues, per-assignee heatmap, flow efficiency, lead time trends
 - **DORA metrics**: deployment frequency, lead time for changes, change failure rate, MTTR — auto-detects GitHub Deployments, Releases, or merged PRs
 - **Cycles / Weekly toggle**: supports both cycle-based sprints and continuous flow, switchable in the UI

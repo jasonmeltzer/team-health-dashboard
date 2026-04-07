@@ -332,21 +332,25 @@ export function LinearSection({ refreshKey, onOpenSettings }: { refreshKey: numb
         {isCycles && data.scopeChanges && (
           <MetricCard
             label="Scope Change"
-            value={data.scopeChanges.net >= 0 ? `+${data.scopeChanges.net}` : `${data.scopeChanges.net}`}
+            value={(() => {
+              const midSprintNet = data.scopeChanges.midSprintAdded - data.scopeChanges.midSprintRemoved;
+              return midSprintNet >= 0 ? `+${midSprintNet}` : `${midSprintNet}`;
+            })()}
             trendLabel={
               <span
                 className={cn(
                   "text-xs",
-                  data.scopeChanges.net > 0
+                  data.scopeChanges.midSprintAdded - data.scopeChanges.midSprintRemoved > 0
                     ? "text-amber-600 dark:text-amber-400"
                     : "text-zinc-500"
                 )}
               >
-                {data.scopeChanges.net > 0
+                {data.scopeChanges.midSprintAdded - data.scopeChanges.midSprintRemoved > 0
                   ? "scope grew"
-                  : data.scopeChanges.net < 0
+                  : data.scopeChanges.midSprintAdded - data.scopeChanges.midSprintRemoved < 0
                   ? "scope reduced"
                   : "on track"}
+                {data.scopeChanges.carryOvers != null && data.scopeChanges.carryOvers > 0 && ` (+${data.scopeChanges.carryOvers} carried)`}
               </span>
             }
             refreshing={refreshing}

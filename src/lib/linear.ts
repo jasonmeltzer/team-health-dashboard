@@ -184,7 +184,8 @@ async function fetchIssueMeta(
 export async function fetchScopeChanges(
   currentCycle: LinearCycle,
   allIssueIds: string[],
-  issueMap: Map<string, LinearIssue>
+  issueMap: Map<string, LinearIssue>,
+  previousCycleId: string | null
 ): Promise<ScopeChangeSummary> {
   // Get previous snapshot before writing the new one
   const prevSnapshot = getLatestCycleSnapshot(currentCycle.id);
@@ -217,6 +218,8 @@ export async function fetchScopeChanges(
       if (result.status !== "fulfilled") continue;
       const issId = batch[j];
       const issue = issueMap.get(issId);
+      const WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
+      const cycleStartMs = new Date(currentCycle.startsAt).getTime();
       for (const entry of result.value) {
         // Only count changes AFTER the sprint started — pre-sprint planning isn't scope change
         if (new Date(entry.createdAt) < new Date(currentCycle.startsAt)) continue;
@@ -229,6 +232,10 @@ export async function fetchScopeChanges(
         const destination = !isAdded
           ? (entry.toCycle?.name ?? (entry.toCycleId === null ? "backlog" : null))
           : null;
+        // Carry-over: issue added within 12h of cycle start, coming from previous cycle
+        const changedAtMs = new Date(entry.createdAt).getTime();
+        const withinWindow = Math.abs(changedAtMs - cycleStartMs) <= WINDOW_MS;
+        const isCarryOver = isAdded && withinWindow && previousCycleId != null && entry.fromCycleId === previousCycleId;
         historyChangesByIssue.push({
           issueId: issId,
           identifier: issue?.identifier ?? issId,
@@ -239,6 +246,7 @@ export async function fetchScopeChanges(
           changedAt: entry.createdAt,
           destination,
           source: "history",
+          isCarryOver,
         });
       }
     }
@@ -277,6 +285,15 @@ export async function fetchScopeChanges(
   );
 
   if (prevSnapshot) {
+    const WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
+    const cycleStartMs = new Date(currentCycle.startsAt).getTime();
+    // Snapshot carry-over heuristic: if this snapshot was captured within 12h of
+    // cycle start, additions in the diff are likely carry-overs. If the snapshot
+    // was captured later, additions are mid-sprint changes. This avoids using
+    // capturedAt as a per-issue timestamp (it's when the snapshot was taken, not
+    // when individual issues entered the cycle).
+    const snapshotCapturedMs = new Date(prevSnapshot.capturedAt).getTime();
+    const snapshotIsNearCycleStart = Math.abs(snapshotCapturedMs - cycleStartMs) <= WINDOW_MS;
     for (const id of diff.added) {
       if (historyCoveredIds.has(`added:${id}`)) continue;
       const issue = issueMap.get(id) ?? removedMeta.get(id);
@@ -290,6 +307,7 @@ export async function fetchScopeChanges(
         changedAt: prevSnapshot.capturedAt,
         destination: null,
         source: "snapshot",
+        isCarryOver: snapshotIsNearCycleStart,
       });
     }
     for (const id of diff.removed) {
@@ -305,6 +323,7 @@ export async function fetchScopeChanges(
         changedAt: prevSnapshot.capturedAt,
         destination: null,
         source: "snapshot",
+        isCarryOver: false,
       });
     }
   }
@@ -319,6 +338,9 @@ export async function fetchScopeChanges(
 
   const added = changes.filter((c) => c.type === "added").length;
   const removed = changes.filter((c) => c.type === "removed").length;
+  const carryOverCount = changes.filter((c) => c.isCarryOver).length;
+  const midSprintAdded = added - carryOverCount; // carry-overs are always "added" type
+  const midSprintRemoved = removed;              // removals can't be carry-overs
 
   return {
     added,
@@ -328,6 +350,9 @@ export async function fetchScopeChanges(
     hasColdStartGap,
     issueCountAtStart: currentCycle.issueCountHistory?.[0] ?? null,
     issueCountNow: allIssueIds.length,
+    midSprintAdded,
+    midSprintRemoved,
+    carryOvers: carryOverCount,
   };
 }
 
@@ -335,6 +360,11 @@ async function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 4
   const now = new Date();
   const since = new Date(now);
   since.setDate(since.getDate() - lookbackDays);
+
+  // Sort all cycles by start date before filtering — needed for previousCycleId lookup
+  const allCyclesSorted = [...cycles].sort(
+    (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+  );
 
   // Filter cycles to those that overlap with the lookback window
   cycles = cycles.filter((c) => new Date(c.endsAt) >= since);
@@ -415,7 +445,11 @@ async function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 4
       const issueMap = new Map(currentCycle.issues.nodes.map((i) => [i.id, i]));
       const allIssueIds = currentCycle.issues.nodes.map((i) => i.id);
       const cycleName = currentCycle.name || `Cycle ${currentCycle.number}`;
-      scopeChanges = await fetchScopeChanges(currentCycle, allIssueIds, issueMap);
+      // Derive previousCycleId from ALL cycles (not filtered by lookback) so
+      // carry-over detection works even when lookback < sprint length
+      const currentIndex = allCyclesSorted.findIndex((c) => c.id === currentCycle.id);
+      const previousCycleId = currentIndex > 0 ? allCyclesSorted[currentIndex - 1].id : null;
+      scopeChanges = await fetchScopeChanges(currentCycle, allIssueIds, issueMap, previousCycleId);
       scopeChangesByCycle[cycleName] = scopeChanges;
     } catch (e) {
       console.warn("[Linear] Failed to fetch scope changes for current cycle:", e);
@@ -442,6 +476,9 @@ async function buildCycleMetrics(cycles: LinearCycle[], lookbackDays: number = 4
           hasColdStartGap: true,
           issueCountAtStart: cycle.issueCountHistory?.[0] ?? null,
           issueCountNow: ids.length,
+          midSprintAdded: added,    // no carry-over detection for past cycles
+          midSprintRemoved: removed,
+          carryOvers: null,         // null = detection unavailable (past cycles)
         };
       }
     } catch (e) {

@@ -177,6 +177,7 @@ Rules:
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}. Do not reference, speculate about, or suggest configuring these.` : ""}
 - Focus your insights on the signals that scored poorly (shown below).
 - When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.
+- When discussing carry-overs: <10% acknowledge as healthy sprint-over-sprint completion; 10-20% note neutrally as moderate inherited backlog; >20% flag as planning concern — team may be over-committing or under-completing.
 
 Score breakdown (signals that lost points):
 ${deductionSummary || "  (none — everything looks healthy)"}`;
@@ -193,15 +194,19 @@ ${deductionSummary || "  (none — everything looks healthy)"}`;
     }
 
     if (linear) {
-      const churnLine = linear.scopeChanges && linear.mode === "cycles" && linear.scopeChanges.issueCountNow > 0
-        ? `\n- Scope churn: ${Math.round(((linear.scopeChanges.added + linear.scopeChanges.removed) / linear.scopeChanges.issueCountNow) * 100)}% (${linear.scopeChanges.added} added, ${linear.scopeChanges.removed} removed)`
+      const scopeChanges = linear.scopeChanges;
+      const churnLine = scopeChanges && linear.mode === "cycles" && scopeChanges.issueCountNow > 0
+        ? `\n- Scope churn (mid-sprint): ${Math.round(((scopeChanges.midSprintAdded + scopeChanges.midSprintRemoved) / scopeChanges.issueCountNow) * 100)}% (${scopeChanges.midSprintAdded} added, ${scopeChanges.midSprintRemoved} removed)`
+        : "";
+      const carryOverLine = scopeChanges && linear.mode === "cycles" && scopeChanges.carryOvers != null && scopeChanges.carryOvers > 0 && scopeChanges.issueCountNow > 0
+        ? `\n- Carry-overs: ${scopeChanges.carryOvers} issues (${Math.round((scopeChanges.carryOvers / scopeChanges.issueCountNow) * 100)}% of sprint)`
         : "";
       sections.push(`Linear Sprint Metrics:
 - Current cycle: ${linear.summary.currentCycleName} (${linear.summary.currentCycleProgress}% complete)
 - Active issues: ${linear.summary.totalActiveIssues}
 - Stalled issues (>5 days no update): ${linear.summary.stalledIssueCount}
 - Average velocity: ${linear.summary.avgVelocity} points/cycle
-- Workload: ${JSON.stringify(linear.workloadDistribution.slice(0, 5))}${churnLine}`);
+- Workload: ${JSON.stringify(linear.workloadDistribution.slice(0, 5))}${churnLine}${carryOverLine}`);
     }
 
     if (slack) {
@@ -298,7 +303,8 @@ Rules:
 - Focus on what changed, what's at risk, and what to do about it. Skip generic advice.
 - The tone should be like a sharp engineering manager's weekly update to their skip-level.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}. Do not reference, speculate about, or suggest configuring these.` : ""}
-- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.`;
+- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.
+- When discussing carry-overs: <10% acknowledge as healthy sprint-over-sprint completion; 10-20% note neutrally as moderate inherited backlog; >20% flag as planning concern — team may be over-committing or under-completing.`;
 
     const sections: string[] = [];
 
@@ -310,13 +316,17 @@ Review bottlenecks: ${JSON.stringify(github.reviewBottlenecks, null, 2)}`);
     }
 
     if (linear) {
-      const scopeLine = linear.scopeChanges && linear.mode === "cycles" && linear.scopeChanges.issueCountNow > 0
-        ? `\nScope churn: ${Math.round(((linear.scopeChanges.added + linear.scopeChanges.removed) / linear.scopeChanges.issueCountNow) * 100)}% (${linear.scopeChanges.added} added, ${linear.scopeChanges.removed} removed of ${linear.scopeChanges.issueCountNow} issues)`
+      const scopeChanges = linear.scopeChanges;
+      const scopeLine = scopeChanges && linear.mode === "cycles" && scopeChanges.issueCountNow > 0
+        ? `\nScope churn (mid-sprint): ${Math.round(((scopeChanges.midSprintAdded + scopeChanges.midSprintRemoved) / scopeChanges.issueCountNow) * 100)}% (${scopeChanges.midSprintAdded} added, ${scopeChanges.midSprintRemoved} removed of ${scopeChanges.issueCountNow} issues)`
+        : "";
+      const carryOverLine = scopeChanges && linear.mode === "cycles" && scopeChanges.carryOvers != null && scopeChanges.carryOvers > 0 && scopeChanges.issueCountNow > 0
+        ? `\nCarry-overs: ${scopeChanges.carryOvers} issues (${Math.round((scopeChanges.carryOvers / scopeChanges.issueCountNow) * 100)}% of sprint)`
         : "";
       sections.push(`Linear Sprint Data:
 Velocity trend: ${JSON.stringify(linear.velocityTrend, null, 2)}
 Stalled issues: ${JSON.stringify(linear.stalledIssues, null, 2)}
-Workload: ${JSON.stringify(linear.workloadDistribution, null, 2)}${scopeLine}`);
+Workload: ${JSON.stringify(linear.workloadDistribution, null, 2)}${scopeLine}${carryOverLine}`);
     }
 
     if (slack) {
@@ -456,25 +466,53 @@ function formatLinearRich(linear: LinearMetrics): string {
   }
 
   if (linear.scopeChanges && linear.mode === "cycles") {
-    const { added, removed, net, changes, hasColdStartGap, issueCountNow } = linear.scopeChanges;
+    const { changes, hasColdStartGap, issueCountNow, midSprintAdded, midSprintRemoved, carryOvers } = linear.scopeChanges;
+
+    // Mid-sprint churn section
+    const midSprintMovements = midSprintAdded + midSprintRemoved;
     const churnPct = issueCountNow > 0
-      ? Math.round(((added + removed) / issueCountNow) * 100)
+      ? Math.round((midSprintMovements / issueCountNow) * 100)
       : 0;
-    lines.push(`\n### Scope Churn`);
+    lines.push(`\n### Scope Churn (Mid-Sprint)`);
     lines.push(`- Sprint size: ${issueCountNow} issues`);
-    lines.push(`- Added mid-sprint: ${added}`);
-    lines.push(`- Removed mid-sprint: ${removed}`);
-    lines.push(`- Net change: ${net > 0 ? "+" : ""}${net}`);
-    lines.push(`- Churn: ${churnPct}% (${added + removed} total movements)`);
+    lines.push(`- Mid-sprint added: ${midSprintAdded} (excludes carry-overs)`);
+    lines.push(`- Mid-sprint removed: ${midSprintRemoved}`);
+    lines.push(`- Net change (mid-sprint): ${midSprintAdded - midSprintRemoved > 0 ? "+" : ""}${midSprintAdded - midSprintRemoved}`);
+    lines.push(`- Churn: ${churnPct}% (${midSprintMovements} total mid-sprint movements)`);
+
     if (hasColdStartGap) {
-      lines.push(`- Note: earlier scope changes may be untracked (no prior snapshot)`);
+      lines.push(`- Note: Dashboard first opened mid-sprint; earlier removals may not be tracked`);
     }
-    if (changes.length > 0) {
-      lines.push(`\n#### Individual Changes`);
-      for (const c of changes) {
-        const dest = c.destination ? ` -> ${c.destination}` : "";
-        const actor = c.actor ? ` by ${c.actor}` : "";
-        lines.push(`- [${c.type.toUpperCase()}] ${c.identifier} "${c.title}"${actor} at ${c.changedAt}${dest}`);
+
+    // List mid-sprint changes
+    const midSprintChanges = changes.filter((c) => !c.isCarryOver);
+    if (midSprintChanges.length > 0) {
+      lines.push(`\nMid-sprint changes:`);
+      for (const c of midSprintChanges) {
+        const actorStr = c.actor ? ` by ${c.actor}` : "";
+        const destStr = c.destination ? ` \u2192 ${c.destination}` : "";
+        const dateStr = new Date(c.changedAt).toLocaleDateString();
+        lines.push(`- ${c.type === "added" ? "+" : "-"} ${c.identifier}: ${c.title}${actorStr} on ${dateStr}${destStr}`);
+      }
+    }
+
+    // Carry-overs section
+    if (carryOvers != null && carryOvers > 0) {
+      const carryOverPct = issueCountNow > 0
+        ? Math.round((carryOvers / issueCountNow) * 100)
+        : 0;
+      lines.push(`\n### Carry-Overs (From Previous Cycle)`);
+      lines.push(`- Carry-over count: ${carryOvers}`);
+      lines.push(`- Carry-over rate: ${carryOverPct}%`);
+
+      const carryOverChanges = changes.filter((c) => c.isCarryOver);
+      if (carryOverChanges.length > 0) {
+        lines.push(`\nCarried-over issues:`);
+        for (const c of carryOverChanges) {
+          const actorStr = c.actor ? ` by ${c.actor}` : "";
+          const dateStr = new Date(c.changedAt).toLocaleDateString();
+          lines.push(`- ${c.identifier}: ${c.title}${actorStr} on ${dateStr}`);
+        }
       }
     }
   }
@@ -735,6 +773,7 @@ Rules:
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}.` : ""}
 - Focus your insights on the signals that scored poorly.
 - When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.
+- When discussing carry-overs: <10% acknowledge as healthy sprint-over-sprint completion; 10-20% note neutrally as moderate inherited backlog; >20% flag as planning concern — team may be over-committing or under-completing.
 
 Score breakdown (signals that lost points):
 ${deductionSummary || "  (none — everything looks healthy)"}`;
@@ -772,7 +811,8 @@ Rules:
 - Focus on what changed, what's at risk, and what to do about it. Skip generic advice.
 - The tone should be like a sharp engineering manager's weekly update to their skip-level.
 - Connected data sources: ${sources.join(", ")}. ONLY discuss these.${notConnected.length > 0 ? `\n- NOT connected (do NOT mention these at all): ${notConnected.join(", ")}.` : ""}
-- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.`;
+- When discussing scope churn: <10% acknowledge sprint discipline positively; 10-20% note neutrally with specific changes; 20-30% flag as concern and suggest planning improvement; >30% escalate as a critical sprint discipline problem requiring immediate process changes.
+- When discussing carry-overs: <10% acknowledge as healthy sprint-over-sprint completion; 10-20% note neutrally as moderate inherited backlog; >20% flag as planning concern — team may be over-committing or under-completing.`;
 
   const dataSections: string[] = [];
   if (github) dataSections.push(formatGitHubRich(github));
