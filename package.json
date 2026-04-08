@@ -21,7 +21,7 @@
     "react": "^19",
     "react-dom": "^19",
     "recharts": "^3.8.0",
-    "team-data-core": "file:../team-data-core/team-data-core-0.1.0.tgz"
+    "team-data-core": "github:jasonmeltzer/team-data-core"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
