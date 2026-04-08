@@ -697,8 +697,11 @@ function buildTimeInState(issues: LinearIssue[], now: Date): TimeInStateData {
     .sort((a, b) => b.meanDays - a.meanDays);
 
   // Flow efficiency: time in "started" states vs total time across all states
+  // Exclude "Blocked" — it has stateType "started" but isn't active work
+  const isActiveWork = (i: TimeInStateIssue) =>
+    i.stateType === "started" && !/blocked/i.test(i.state);
   const activeTime = issueRecords
-    .filter((i) => i.stateType === "started")
+    .filter(isActiveWork)
     .reduce((s, i) => s + i.daysInState, 0);
   const totalTime = issueRecords.reduce((s, i) => s + i.daysInState, 0);
   const flowEfficiency = totalTime > 0 ? Math.round((activeTime / totalTime) * 100) : 0;

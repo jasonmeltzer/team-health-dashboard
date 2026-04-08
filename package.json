@@ -11,7 +11,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "team-data-core": "github:jasonmeltzer/team-data-core",
     "@anthropic-ai/sdk": "^0.78.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "@slack/web-api": "^7.14.1",
@@ -21,7 +20,8 @@
     "octokit": "^5.0.5",
     "react": "^19",
     "react-dom": "^19",
-    "recharts": "^3.8.0"
+    "recharts": "^3.8.0",
+    "team-data-core": "file:../team-data-core/team-data-core-0.1.0.tgz"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
