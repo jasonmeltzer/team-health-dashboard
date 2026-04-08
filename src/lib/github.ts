@@ -104,10 +104,12 @@ async function _fetchGitHubMetrics(
 
     const prId = `${owner}/${repo}#${pr.number}`;
     const reviews = reviewsByPrId.get(prId);
-    if (reviews && reviews.length > 0) {
+    // Filter out bot reviewers (e.g. github-actions[bot]) — they review instantly and skew metrics
+    const humanReviews = reviews?.filter((r) => !r.reviewer.endsWith("[bot]"));
+    if (humanReviews && humanReviews.length > 0) {
       const firstReviewHours = hoursBetween(
         new Date(pr.created_at),
-        new Date(reviews[0].submitted_at)
+        new Date(humanReviews[0].submitted_at)
       );
       entry.reviewHours += firstReviewHours;
       entry.reviewCount += 1;
@@ -158,6 +160,8 @@ async function _fetchGitHubMetrics(
   // Completed reviews from all stored reviews (deduplicated: one count per reviewer per PR)
   const seenReviewerPerPR = new Set<string>();
   for (const review of storedReviews) {
+    // Skip bot reviewers — they skew review time metrics
+    if (review.reviewer.endsWith("[bot]")) continue;
     // Find the PR this review belongs to
     const pr = storedPRs.find((p) => `${owner}/${repo}#${p.number}` === review.pr_id);
     if (!pr) continue;
