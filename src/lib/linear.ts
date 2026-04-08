@@ -91,7 +91,7 @@ export async function fetchLinearMetrics(
           nodes {
             id name number startsAt endsAt progress
             issueCountHistory
-            issues {
+            issues(first: 250) {
               nodes {
                 id identifier title
                 state { name type }
