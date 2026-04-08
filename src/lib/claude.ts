@@ -257,8 +257,12 @@ ${deductionSummary || "  (none — everything looks healthy)"}`;
       overallHealth: scoreResult.overallHealth as HealthSummary["overallHealth"],
       score: scoreResult.score,
       scoreBreakdown: scoreResult.deductions,
-      insights: Array.isArray(parsed.insights) ? parsed.insights : [],
-      recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
+      insights: Array.isArray(parsed.insights)
+        ? parsed.insights.map((i: unknown) => typeof i === "string" ? i : typeof i === "object" && i !== null && "label" in i ? `${(i as Record<string, unknown>).label}: ${(i as Record<string, unknown>).value}` : String(i))
+        : [],
+      recommendations: Array.isArray(parsed.recommendations)
+        ? parsed.recommendations.map((r: unknown) => typeof r === "string" ? r : typeof r === "object" && r !== null && "text" in r ? String((r as Record<string, unknown>).text) : String(r))
+        : [],
       generatedAt: new Date().toISOString(),
     };
   } catch (err) {
