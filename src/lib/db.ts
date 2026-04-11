@@ -34,6 +34,21 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_cycle_snapshots_cycle_id
       ON cycle_snapshots(cycle_id, captured_at DESC)
   `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS oauth_tokens (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      provider     TEXT NOT NULL UNIQUE,
+      access_token TEXT NOT NULL,
+      refresh_token TEXT,
+      expires_at   TEXT,
+      account_name TEXT,
+      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_oauth_tokens_provider ON oauth_tokens(provider)
+  `);
 }
 
 export function getDb(): Database.Database {
