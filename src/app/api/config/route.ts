@@ -1,4 +1,6 @@
 import { getConfigStatus, saveConfig, clearConfigCache } from "@/lib/config";
+import { deleteOAuthToken } from "@/lib/oauth-db";
+import type { OAuthProvider } from "@/types/oauth";
 import { cache } from "@/lib/cache";
 
 const ALLOWED_KEYS = new Set([
@@ -9,6 +11,7 @@ const ALLOWED_KEYS = new Set([
   "LINEAR_TEAM_ID",
   "SLACK_BOT_TOKEN",
   "SLACK_CHANNEL_IDS",
+  "SLACK_TEAM_MEMBER_IDS",
   "ANTHROPIC_API_KEY",
   "AI_PROVIDER",
   "OLLAMA_BASE_URL",
@@ -30,7 +33,7 @@ const ALLOWED_KEYS = new Set([
 
 export async function GET() {
   clearConfigCache();
-  return Response.json({ data: getConfigStatus() });
+  return Response.json({ data: await getConfigStatus() });
 }
 
 export async function POST(request: Request) {
@@ -39,6 +42,14 @@ export async function POST(request: Request) {
 
     if (!body || typeof body !== "object") {
       return Response.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    // Disconnect action: remove OAuth token for a provider
+    if (body.action === "disconnect" && ["github", "linear", "slack"].includes(body.provider)) {
+      deleteOAuthToken(body.provider as OAuthProvider);
+      clearConfigCache();
+      cache.clear();
+      return Response.json({ data: await getConfigStatus() });
     }
 
     // Only allow known config keys
@@ -53,7 +64,7 @@ export async function POST(request: Request) {
     clearConfigCache();
     cache.clear(); // New config invalidates all cached API data
 
-    return Response.json({ data: getConfigStatus() });
+    return Response.json({ data: await getConfigStatus() });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to save configuration";

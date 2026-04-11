@@ -5,7 +5,7 @@ import { fetchSlackMetrics } from "@/lib/slack";
 import { fetchDORAMetrics } from "@/lib/dora";
 import { generateHealthSummary, isAIConfigured, getProvider, OllamaNotRunningError } from "@/lib/claude";
 import { computeHealthScore, type ScoreDeduction, type ScoreWeights } from "@/lib/scoring";
-import { getConfig } from "@/lib/config";
+import { getConfig, getConfigAsync } from "@/lib/config";
 import { getOrFetch, buildCacheKey, cache, getTTL } from "@/lib/cache";
 import { writeSnapshot } from "@/lib/db";
 
@@ -28,15 +28,15 @@ async function fetchSourceData() {
   const channelIdsStr = getConfig("SLACK_CHANNEL_IDS");
   const channelIds = channelIdsStr?.split(",").map((id) => id.trim());
 
-  const githubConfigured = !!(owner && repo && getConfig("GITHUB_TOKEN"));
+  const githubConfigured = !!(owner && repo && (await getConfigAsync("GITHUB_TOKEN")));
   const [github, linear, slack, dora] = await Promise.all([
     githubConfigured
       ? getOrFetch(buildCacheKey("github", { staleDays: 7, lookbackDays: 30 }), getTTL("github"), () => fetchGitHubMetrics(owner!, repo!)).then((r) => r.value).catch(() => null)
       : null,
-    teamId && getConfig("LINEAR_API_KEY")
+    teamId && (await getConfigAsync("LINEAR_API_KEY"))
       ? getOrFetch(buildCacheKey("linear", { mode: "auto", days: 42 }), getTTL("linear"), () => fetchLinearMetrics(teamId)).then((r) => r.value).catch(() => null)
       : null,
-    channelIds && getConfig("SLACK_BOT_TOKEN")
+    channelIds && (await getConfigAsync("SLACK_BOT_TOKEN"))
       ? getOrFetch(buildCacheKey("slack", { channels: channelIdsStr }), getTTL("slack"), () => fetchSlackMetrics(channelIds)).then((r) => r.value).catch(() => null)
       : null,
     githubConfigured

@@ -14,7 +14,7 @@ import type {
   DORARating,
 } from "@/types/dora";
 import { getISOWeek, hoursBetween, daysAgo } from "@/lib/utils";
-import { getConfig } from "@/lib/config";
+import { getConfigAsync } from "@/lib/config";
 
 // Internal extended record that carries the shared DB primary key for writeback.
 // This type is not exposed outside this module.
@@ -34,7 +34,7 @@ export async function fetchDORAMetrics(
   lookbackDays: number = 30,
   options: DORAOptions = {}
 ): Promise<DORAMetrics> {
-  const token = getConfig("GITHUB_TOKEN")!;
+  const token = (await getConfigAsync("GITHUB_TOKEN"))!;
   // Octokit is still needed for incident fetching (GitHub issues + revert PRs)
   const octokit = new Octokit({
     auth: token,

@@ -8,7 +8,7 @@ import {
 } from "team-data-core";
 import type { PRMetrics, CycleTimeDataPoint, ReviewBottleneck, BottleneckPR, StalePR, OpenPR } from "@/types/github";
 import { getISOWeek, daysBetween, hoursBetween, daysAgo } from "@/lib/utils";
-import { getConfig } from "@/lib/config";
+import { getConfigAsync } from "@/lib/config";
 import { RateLimitError } from "@/lib/errors";
 
 export async function fetchGitHubMetrics(
@@ -45,7 +45,7 @@ async function _fetchGitHubMetrics(
   lookbackDays: number = 30
 ): Promise<PRMetrics> {
   // Fetch from GitHub API and store in shared DB
-  await fetchAndStorePRs(getConfig("GITHUB_TOKEN")!, owner, repo, { lookbackDays });
+  await fetchAndStorePRs((await getConfigAsync("GITHUB_TOKEN"))!, owner, repo, { lookbackDays });
 
   // Read back stored PRs and reviews
   const storedPRs: StoredPR[] = readPRs(owner, repo, { lookbackDays });

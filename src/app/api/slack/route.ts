@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { fetchSlackMetrics } from "@/lib/slack";
-import { getConfig } from "@/lib/config";
+import { getConfig, getConfigAsync } from "@/lib/config";
 import { RateLimitError } from "@/lib/errors";
 import { getOrFetch, buildCacheKey, getTTL, cache } from "@/lib/cache";
 
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   try {
     const channelIdsStr = getConfig("SLACK_CHANNEL_IDS");
 
-    if (!channelIdsStr || !getConfig("SLACK_BOT_TOKEN")) {
+    if (!channelIdsStr || !(await getConfigAsync("SLACK_BOT_TOKEN"))) {
       return Response.json({ notConfigured: true });
     }
 

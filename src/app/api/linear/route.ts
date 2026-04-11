@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { fetchLinearMetrics } from "@/lib/linear";
-import { getConfig } from "@/lib/config";
+import { getConfig, getConfigAsync } from "@/lib/config";
 import { RateLimitError } from "@/lib/errors";
 import { getOrFetch, buildCacheKey, getTTL, cache } from "@/lib/cache";
 
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   try {
     const teamId = getConfig("LINEAR_TEAM_ID");
 
-    if (!teamId || !getConfig("LINEAR_API_KEY")) {
+    if (!teamId || !(await getConfigAsync("LINEAR_API_KEY"))) {
       return Response.json({ notConfigured: true });
     }
 
