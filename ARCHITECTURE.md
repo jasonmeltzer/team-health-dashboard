@@ -1,6 +1,6 @@
 # Architecture
 
-> Last updated: 2026-04-06. Update this document when making structural changes.
+> Last updated: 2026-04-18. Update this document when making structural changes.
 
 ## Overview
 
@@ -16,6 +16,7 @@ Team Health Dashboard is a Next.js 16 application that aggregates engineering me
 - **@slack/web-api** for Slack API
 - **Anthropic SDK**, **Ollama**, or **Manual** (any AI chat) for AI analysis
 - **better-sqlite3** for health score snapshot persistence (WAL mode, file-based)
+- **Arctic** (v3) for OAuth 2.0 provider abstractions (GitHub, Linear); Slack uses manual OAuth config
 
 ---
 
@@ -117,9 +118,12 @@ src/
 │   ├── dora.ts                         # DORA metrics: deployments, incidents, correlation
 │   ├── claude.ts                       # AI provider abstraction + prompt builders
 │   ├── scoring.ts                      # Deterministic health score computation (with configurable weights)
-│   ├── db.ts                           # SQLite singleton (better-sqlite3, WAL mode) — health_snapshots + cycle_snapshots tables
+│   ├── db.ts                           # SQLite singleton (better-sqlite3, WAL mode) — health_snapshots + cycle_snapshots + oauth_tokens tables
 │   ├── errors.ts                       # Typed errors (RateLimitError)
-│   ├── config.ts                       # Dual config reader (env vars + JSON file)
+│   ├── config.ts                       # Triple-layer config reader (env > .config.local.json > OAuth DB)
+│   ├── oauth-crypto.ts                 # AES-128-GCM encryption/decryption for OAuth tokens at rest
+│   ├── oauth-db.ts                     # OAuth token CRUD with Linear inline refresh
+│   ├── oauth-providers.ts              # Arctic GitHub/Linear provider factories + Slack manual OAuth config
 │   ├── utils.ts                        # Date helpers
 │   └── __tests__/                      # Vitest unit tests
 └── types/
@@ -127,6 +131,7 @@ src/
     ├── trends.ts                       # TrendSnapshot, TrendsResponse types
     ├── github.ts, linear.ts, slack.ts  # Domain types
     ├── dora.ts                         # DORA types
+    ├── oauth.ts                        # OAuthProvider, OAuthTokenData, OAuthTokenRow, OAuthStatus
     └── metrics.ts                      # Health score + narrative types
 ```
 
@@ -388,13 +393,17 @@ Auto-detected: if `ANTHROPIC_API_KEY` is set, uses Anthropic. Otherwise defaults
 
 ## Configuration System
 
-### Dual Config with Precedence
+### Triple-Layer Config with Precedence
 
 ```
-process.env (via .env.local)  →  takes precedence
+process.env (via .env.local)         →  takes precedence
   ↓ fallback
-.config.local.json (via Settings UI)
+.config.local.json (via Settings UI) →  next
+  ↓ fallback (OAuth-mapped keys only: GITHUB_TOKEN, LINEAR_API_KEY, SLACK_BOT_TOKEN)
+oauth_tokens table (decrypted)
 ```
+
+For `GITHUB_TOKEN`, `LINEAR_API_KEY`, and `SLACK_BOT_TOKEN`, `getConfigAsync()` falls through to the OAuth token DB when no env var or file-config value is set. This lets a user connect an integration via OAuth without re-entering a PAT. All API keys callers (`/api/github`, `/api/linear`, `/api/slack`, `/api/dora`, `/api/health-summary`, `/api/weekly-narrative`, `/api/ai-prompt`, `/api/ai-response`) use `getConfigAsync()` for these three keys.
 
 ### Settings UI
 
@@ -407,7 +416,48 @@ Gear icon → modal with sidebar navigation (GitHub, Linear, Slack, DORA, AI, Sc
 
 ### Code
 
-`src/lib/config.ts` — exports `getConfig(key)`, `saveConfig(values)`, `getConfigStatus()`, `clearConfigCache()`.
+`src/lib/config.ts` — exports `getConfig(key)`, `getConfigAsync(key)` (triple-layer with OAuth fallback), `saveConfig(values)`, `getConfigStatus()`, `getConfigStatusAsync()` (includes OAuth connection state per provider), `clearConfigCache()`.
+
+---
+
+## OAuth Foundation
+
+> **Status:** Phase 04 Plan 01 landed the infrastructure (types, encryption, storage, provider config, config fallback). The user-facing login/callback routes and Settings UI for OAuth connect land in Plan 02.
+
+### Token Storage
+
+`oauth_tokens` table in `data/health.db`:
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `id` | INTEGER PK | Row ID |
+| `provider` | TEXT UNIQUE | `github` \| `linear` \| `slack` (one row per provider) |
+| `access_token` | TEXT | AES-128-GCM ciphertext, base64 |
+| `refresh_token` | TEXT NULL | Encrypted (Linear only; GitHub/Slack don't expire) |
+| `scope` | TEXT | Granted scopes from provider |
+| `expires_at` | TEXT NULL | ISO timestamp (Linear only) |
+| `created_at` / `updated_at` | TEXT | ISO timestamps |
+
+### Encryption
+
+`src/lib/oauth-crypto.ts` — AES-128-GCM with the key from `OAUTH_ENCRYPTION_KEY` (generate: `openssl rand -base64 32`). IV + auth tag are stored alongside ciphertext in a single base64 blob. Encryption key is validated on module load; missing key throws a clear error.
+
+### Provider Factories
+
+`src/lib/oauth-providers.ts`:
+- **GitHub**: Arctic `GitHub` instance — handles state token, code exchange, PKCE not required
+- **Linear**: Arctic `Linear` instance — handles state, PKCE, and returns refresh tokens
+- **Slack**: Manual OAuth config (Arctic lacks a Slack provider) — login URL builder and token exchange helper implemented inline
+
+### Token CRUD
+
+`src/lib/oauth-db.ts`:
+- `saveToken(provider, tokenData)` — upserts encrypted token row (INSERT OR REPLACE by provider)
+- `getToken(provider)` — returns decrypted `OAuthTokenData` or null; for Linear, checks `expires_at` and inline-refreshes if within 5 min of expiry, updating the row in-place
+- `deleteToken(provider)` — disconnects a provider
+- `listConnectedProviders()` — returns `OAuthStatus[]` for Settings UI
+
+All CRUD is wrapped in try/catch so DB failures never crash the request path.
 
 ---
 
@@ -627,3 +677,4 @@ CREATE TABLE IF NOT EXISTS health_snapshots (
 - Slack integration has not been verified with a live workspace
 - Server-side in-memory cache is lost on restart (no cross-worker sharing), but SQLite snapshots persist across restarts
 - SQLite stores one health score snapshot per day — sub-daily granularity is not tracked
+- OAuth foundation is in place (token encryption, storage, config fallback) but the login/callback routes and "Connect via OAuth" buttons are not yet implemented — users still configure integrations via PAT/API key in the Settings UI

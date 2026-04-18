@@ -146,6 +146,11 @@ There are two ways to configure integrations:
 | `DORA_DEPLOYMENT_SOURCE` | No | `auto` (default), `deployments`, `releases`, or `merges` |
 | `DORA_ENVIRONMENT` | No | Filter deployments by environment (e.g., `production`) |
 | `DORA_INCIDENT_LABELS` | No | Comma-separated issue labels (default: `incident,hotfix,production-bug`) |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | For GitHub OAuth | OAuth App credentials (alternative to `GITHUB_TOKEN`) |
+| `LINEAR_CLIENT_ID` / `LINEAR_CLIENT_SECRET` | For Linear OAuth | OAuth App credentials (alternative to `LINEAR_API_KEY`) |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | For Slack OAuth | OAuth App credentials (alternative to `SLACK_BOT_TOKEN`) |
+| `OAUTH_ENCRYPTION_KEY` | When using OAuth | AES key for token encryption at rest. Generate: `openssl rand -base64 32` |
+| `APP_BASE_URL` | When using OAuth | Base URL for OAuth callbacks (default: `http://localhost:3000`) |
 | `PORT` | No | Dev server port (default: 5555). Must be a shell env var, not in `.env.local` |
 
 The dashboard gracefully handles missing integrations — unconfigured sections show placeholders explaining what they provide and how to enable them.
@@ -186,10 +191,13 @@ src/
 │   ├── scoring.ts                      # Deterministic health score computation (with configurable weights)
 │   ├── db.ts                           # SQLite singleton (better-sqlite3, WAL mode)
 │   ├── errors.ts                       # Typed errors (RateLimitError)
-│   ├── config.ts                       # Dual config reader (env vars + .config.local.json)
+│   ├── config.ts                       # Triple-layer config reader (env > file > OAuth DB)
+│   ├── oauth-crypto.ts                 # AES-128-GCM token encryption
+│   ├── oauth-db.ts                     # OAuth token CRUD with Linear inline refresh
+│   ├── oauth-providers.ts              # Arctic GitHub/Linear + Slack manual provider factories
 │   ├── utils.ts                        # Date helpers, rate limit error handling
 │   └── __tests__/                      # Vitest unit tests
-└── types/                              # TypeScript type definitions
+└── types/                              # TypeScript type definitions (includes oauth.ts)
 ```
 
 ## Design Decisions
