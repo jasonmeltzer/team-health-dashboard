@@ -434,9 +434,9 @@ Gear icon → modal with sidebar navigation (GitHub, Linear, Slack, DORA, AI, Sc
 | `provider` | TEXT UNIQUE | `github` \| `linear` \| `slack` (one row per provider) |
 | `access_token` | TEXT | AES-128-GCM ciphertext, base64 |
 | `refresh_token` | TEXT NULL | Encrypted (Linear only; GitHub/Slack don't expire) |
-| `scope` | TEXT | Granted scopes from provider |
 | `expires_at` | TEXT NULL | ISO timestamp (Linear only) |
-| `created_at` / `updated_at` | TEXT | ISO timestamps |
+| `account_name` | TEXT NULL | Display name from provider profile (e.g. GitHub login) |
+| `created_at` / `updated_at` | TEXT | ISO timestamps (default `datetime('now')`) |
 
 ### Encryption
 
