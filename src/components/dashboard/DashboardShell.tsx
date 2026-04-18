@@ -138,7 +138,15 @@ export function DashboardShell() {
           </div>
         </Card>
       ) : allUnconfigured ? (
-        <WelcomeHero status={configStatus} onConnect={handleConnect} />
+        <WelcomeHero
+          status={configStatus}
+          onConnect={handleConnect}
+          onOAuthSuccess={() => {
+            clearClientCache();
+            setRefreshKey((k) => k + 1);
+            refetchConfig();
+          }}
+        />
       ) : (
         <>
           <SetupBanner
