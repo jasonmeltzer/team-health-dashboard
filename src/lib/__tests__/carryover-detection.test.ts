@@ -14,6 +14,10 @@ vi.mock("@/lib/config", () => ({
     if (key === "LINEAR_API_KEY") return "test-key";
     return undefined;
   }),
+  getConfigAsync: vi.fn(async (key: string) => {
+    if (key === "LINEAR_API_KEY") return "test-key";
+    return undefined;
+  }),
 }));
 
 import { fetchScopeChanges } from "@/lib/linear";
