@@ -6,7 +6,7 @@ import type {
   OverloadIndicator,
 } from "@/types/slack";
 import { formatDate, minutesBetween, daysAgo } from "@/lib/utils";
-import { getConfigAsync } from "@/lib/config";
+import { getConfig, getConfigAsync } from "@/lib/config";
 import { RateLimitError } from "@/lib/errors";
 
 export async function fetchSlackMetrics(
@@ -40,6 +40,13 @@ async function _fetchSlackMetrics(
   const client = new WebClient(await getConfigAsync("SLACK_BOT_TOKEN"));
   const sevenDaysAgo = Math.floor(daysAgo(7).getTime() / 1000).toString();
 
+  // Team member filter (D-12) — SLACK_TEAM_MEMBER_IDS is not OAuth-mapped so sync getConfig is correct
+  const teamMemberIdsRaw = getConfig("SLACK_TEAM_MEMBER_IDS");
+  const teamMemberIds = teamMemberIdsRaw
+    ? teamMemberIdsRaw.split(/[,\n]/).map((id) => id.trim()).filter(Boolean)
+    : [];
+  const hasFilter = teamMemberIds.length > 0;
+
   // Fetch user list for name mapping — cursor pagination capped at 1000 users (5 pages x 200/page)
   const userMap = new Map<string, string>();
   let cursor: string | undefined;
@@ -50,7 +57,9 @@ async function _fetchSlackMetrics(
     const usersRes = await client.users.list({ limit: 200, cursor });
     for (const user of usersRes.members || []) {
       if (user.id && user.real_name && !user.is_bot) {
-        userMap.set(user.id, user.real_name);
+        if (!hasFilter || teamMemberIds.includes(user.id)) {
+          userMap.set(user.id, user.real_name);
+        }
       }
     }
     cursor = usersRes.response_metadata?.next_cursor || undefined;
@@ -256,5 +265,6 @@ async function _fetchSlackMetrics(
       potentiallyOverloaded: overloadIndicators.filter((o) => o.isOverloaded)
         .length,
     },
+    teamMemberFilter: hasFilter ? teamMemberIds.length : null,
   };
 }

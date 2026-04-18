@@ -30,4 +30,6 @@ export interface SlackMetrics {
     mostActiveChannel: string;
     potentiallyOverloaded: number;
   };
+  /** Number of members in the SLACK_TEAM_MEMBER_IDS filter, or null if no filter active. */
+  teamMemberFilter: number | null;
 }
