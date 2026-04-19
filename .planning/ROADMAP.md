@@ -144,7 +144,13 @@ Plans:
   3. OAuth tokens refresh automatically — user does not need to reconnect after token expiry
   4. Existing env var and `.config.local.json` auth paths continue to work unchanged alongside OAuth
   5. Slack integration returns real data from a verified live workspace with no errors
-**Plans**: TBD
+**Plans:** 3/4 plans complete
+
+Plans:
+- [x] 04-01-PLAN.md — OAuth backend foundation (encryption, DB, Arctic providers, triple-layer config)
+- [x] 04-02-PLAN.md — OAuth login and callback routes for GitHub, Linear, and Slack
+- [x] 04-03-PLAN.md — Settings UI OAuth connected/disconnected states and WelcomeHero OAuth flow
+- [ ] 04-04-PLAN.md — Slack verification (live workspace, team member filtering, smoke tests)
 
 ### Phase 5: Shared Data Layer
 **Goal**: GitHub and Linear data fetching + SQLite storage are extracted into a reusable npm package (team-data-core) that this project and other repos can depend on, with shared tables for common data (PRs, reviews, deployments, issues, cycles, teams) and per-app tables for application-specific data (health_snapshots, cycle_snapshots)
@@ -183,7 +189,7 @@ Phases execute in numeric order: 1 -> 1.1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.3 -> 03.4
 | 3.3 Scope Churn & AI (INSERTED) | 2/2 | Complete   | 2026-04-04 |
 | 03.4 Carry-Over Classification (INSERTED) | 2/2 | Complete    | 2026-04-06 |
 | 5. Shared Data Layer | 5/5 | Complete   | 2026-04-07 |
-| 4. OAuth & Slack Verification | 0/? | Not started | - |
+| 4. OAuth & Slack Verification | 2/4 | In Progress | - |
 
 ## Backlog
 

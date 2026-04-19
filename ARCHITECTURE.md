@@ -1,6 +1,6 @@
 # Architecture
 
-> Last updated: 2026-04-18. Update this document when making structural changes.
+> Last updated: 2026-04-19. Update this document when making structural changes.
 
 ## Overview
 
@@ -420,44 +420,131 @@ Gear icon → modal with sidebar navigation (GitHub, Linear, Slack, DORA, AI, Sc
 
 ---
 
-## OAuth Foundation
+## OAuth Authentication System
 
-> **Status:** Phase 04 Plan 01 landed the infrastructure (types, encryption, storage, provider config, config fallback). The user-facing login/callback routes and Settings UI for OAuth connect land in Plan 02.
+End-to-end OAuth for GitHub, Linear, and Slack. Arctic v3 handles GitHub and Linear; Slack uses a manual OAuth v2 flow because Arctic's Slack provider is OIDC-only (cannot produce bot tokens). All three providers share the same token storage, encryption, popup flow, and UI state machine.
+
+### Flow Overview (popup model — D-04)
+
+```
+User clicks "Connect via GitHub" in SettingsModal or WelcomeHero
+  → openOAuthPopup() (src/lib/oauth-client.ts)
+    → synchronous window.open('/api/auth/login/github', 'oauth-popup', ...)
+      → GET /api/auth/login/github (src/app/api/auth/login/github/route.ts)
+        → generateState(), set {provider}_oauth_state cookie (httpOnly, 10min TTL)
+        → redirect to GitHub consent URL
+  → User approves on GitHub
+    → GET /api/auth/callback/github (src/app/api/auth/callback/github/route.ts)
+      → validate state cookie
+      → Arctic: github.validateAuthorizationCode(code)
+      → best-effort identity fetch: GET api.github.com/user for login name
+      → saveOAuthToken('github', { accessToken, accountName, ... })
+      → respond with HTML that posts { type: 'oauth-callback', provider, success, accountName }
+        to window.opener and calls window.close()
+  → Parent window: message listener (origin + type + provider filtered)
+    → re-fetch /api/config to pick up new OAuth status
+    → flip SettingsModal to "Connected as [account]" state
+```
+
+The Slack callback uses manual `fetch('https://slack.com/api/oauth.v2.access', ...)` for code exchange — same popup/postMessage envelope and token-storage path otherwise.
+
+### Triple-Layer Config with OAuth Fallback
+
+```
+process.env (via .env.local)         →  highest precedence
+  ↓ fallback
+.config.local.json (via Settings UI) →  next
+  ↓ fallback (only for GITHUB_TOKEN, LINEAR_API_KEY, SLACK_BOT_TOKEN)
+oauth_tokens table (decrypted, with Linear inline refresh)
+```
+
+`src/lib/config.ts`:
+- `getConfig(key)` — synchronous, reads env + `.config.local.json` only. Used by every non-OAuth-mapped key (ports, AI provider, cache TTLs, `SLACK_TEAM_MEMBER_IDS`, scoring weights).
+- `getConfigAsync(key)` — asynchronous, adds OAuth DB as layer 3 for the three OAuth-mapped keys. Dynamic-imports `oauth-db` to avoid a circular dependency at module load.
+
+Splitting sync and async avoids cascading async through synchronous callers like `cache.ts.getTTL()` and `claude.ts.getProvider()`. The UI precedence rule (D-09) — env var > file > OAuth — is enforced identically in both the runtime fallback and the Settings UI state machine.
 
 ### Token Storage
 
-`oauth_tokens` table in `data/health.db`:
+`oauth_tokens` table in `data/health.db` (Plan 02 persistence DB — not the shared `team-data-core` DB):
 
-| Column | Type | Purpose |
-|--------|------|---------|
-| `id` | INTEGER PK | Row ID |
-| `provider` | TEXT UNIQUE | `github` \| `linear` \| `slack` (one row per provider) |
-| `access_token` | TEXT | AES-128-GCM ciphertext, base64 |
-| `refresh_token` | TEXT NULL | Encrypted (Linear only; GitHub/Slack don't expire) |
-| `expires_at` | TEXT NULL | ISO timestamp (Linear only) |
-| `account_name` | TEXT NULL | Display name from provider profile (e.g. GitHub login) |
-| `created_at` / `updated_at` | TEXT | ISO timestamps (default `datetime('now')`) |
+| Column                        | Type                    | Purpose                                                                          |
+| ----------------------------- | ----------------------- | -------------------------------------------------------------------------------- |
+| `id`                          | INTEGER PK              | Row ID                                                                           |
+| `provider`                    | TEXT UNIQUE             | `github` \| `linear` \| `slack` (one row per provider)                           |
+| `access_token`                | TEXT                    | AES-128-GCM ciphertext, base64 (IV + auth tag + ciphertext concatenated)         |
+| `refresh_token`               | TEXT NULL               | Encrypted (Linear only; GitHub and Slack bot tokens don't expire)                |
+| `expires_at`                  | TEXT NULL               | ISO timestamp for Linear access tokens (24h lifetime)                            |
+| `account_name`                | TEXT NULL               | Best-effort display name from provider profile (GitHub login, Linear viewer name, Slack team name) |
+| `created_at` / `updated_at`   | TEXT                    | ISO timestamps (default `datetime('now')`)                                       |
 
-### Encryption
+### Token Encryption at Rest
 
-`src/lib/oauth-crypto.ts` — AES-128-GCM with the key from `OAUTH_ENCRYPTION_KEY` (generate: `openssl rand -base64 32`). IV + auth tag are stored alongside ciphertext in a single base64 blob. Encryption key is validated on module load; missing key throws a clear error.
+`src/lib/oauth-crypto.ts` — AES-128-GCM via Node.js built-in `crypto`. Key derived from `OAUTH_ENCRYPTION_KEY` via SHA-256 and sliced to 16 bytes. Each encryption call uses a fresh 16-byte IV. Output layout: `iv (16) || authTag (16) || ciphertext`, base64-encoded. Missing `OAUTH_ENCRYPTION_KEY` throws a clear error — never silently stores tokens unencrypted.
+
+Oslo was originally considered (per CLAUDE.md) but is deprecated; built-in `crypto` requires zero third-party dependencies and uses the same algorithm.
 
 ### Provider Factories
 
 `src/lib/oauth-providers.ts`:
-- **GitHub**: Arctic `GitHub` instance — handles state token, code exchange, PKCE not required
-- **Linear**: Arctic `Linear` instance — handles state, PKCE, and returns refresh tokens
-- **Slack**: Manual OAuth config (Arctic lacks a Slack provider) — login URL builder and token exchange helper implemented inline
+- **GitHub** — `getGitHubProvider()` returns an Arctic `GitHub` instance. Scopes: `repo read:org`. The `repo` scope grants write access (GitHub OAuth has no read-only repo scope); this is disclosed in the Settings UI help text.
+- **Linear** — `getLinearProvider()` returns an Arctic `Linear` instance. Scope: `read`. Returns refresh tokens (apps created after Oct 2025 have this by default).
+- **Slack** — `SLACK_OAUTH_CONFIG` exposes `authorizeUrl`, `tokenUrl`, and `getRedirectUri()` for the manual v2 flow. Bot scopes: `channels:read channels:history users:read`.
 
-### Token CRUD
+All factory functions lazily read env vars — absent credentials don't crash module load; they only fail when a connect attempt starts.
+
+### Linear Token Refresh (on-demand, D-07)
 
 `src/lib/oauth-db.ts`:
-- `saveToken(provider, tokenData)` — upserts encrypted token row (INSERT OR REPLACE by provider)
-- `getToken(provider)` — returns decrypted `OAuthTokenData` or null; for Linear, checks `expires_at` and inline-refreshes if within 5 min of expiry, updating the row in-place
-- `deleteToken(provider)` — disconnects a provider
-- `listConnectedProviders()` — returns `OAuthStatus[]` for Settings UI
+- `saveOAuthToken(provider, tokenData)` — upserts encrypted row (INSERT OR REPLACE by `provider`)
+- `getOAuthToken(provider)` — returns decrypted access token or null. For Linear, checks `expires_at` and, if within 5 minutes of expiry, calls `https://api.linear.app/oauth/token` with `grant_type=refresh_token` and rotates both access and refresh tokens atomically (Linear invalidates old refresh tokens on each use — failure to rotate causes `invalid_grant` on the next refresh).
+- If the refresh fails (revoked, network error), the row is deleted (D-08) and null is returned — the caller falls back to env var / file config, or the UI shows the amber "Connection lost" banner with a Reconnect button.
+- `deleteOAuthToken(provider)` — exposed via `POST /api/config { action: "disconnect", provider }` for the Settings UI disconnect flow.
+- `getOAuthStatus()` — returns connection state + `accountName` per provider for the Settings UI.
 
-All CRUD is wrapped in try/catch so DB failures never crash the request path.
+All DB operations are wrapped in try/catch; DB failures never crash the request path.
+
+### OAuth API Routes
+
+| Route                                     | Purpose                                                                                             |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `GET /api/auth/login/github`              | generate state cookie, redirect to GitHub consent (scopes `repo read:org`)                          |
+| `GET /api/auth/login/linear`              | generate state cookie, redirect to Linear consent (scope `read`)                                    |
+| `GET /api/auth/login/slack`               | generate state cookie, redirect to Slack OAuth v2 (bot scopes)                                      |
+| `GET /api/auth/callback/github`           | validate state, Arctic code exchange, fetch /user, save encrypted token                             |
+| `GET /api/auth/callback/linear`           | validate state, Arctic code exchange, fetch viewer via GraphQL, save encrypted access+refresh+expires_at |
+| `GET /api/auth/callback/slack`            | validate state, manual fetch to `oauth.v2.access`, save encrypted bot token                         |
+| `/auth/callback/[provider]` (page)        | client-side fallback landing page for the rare case where the popup lands on a page URL            |
+
+All callback responses return HTML that `postMessage`s `{ type: 'oauth-callback', provider, success, accountName?, reason? }` to `window.opener` with `window.location.origin` as the target, then auto-closes the popup. No `Cross-Origin-Opener-Policy` header is set (COOP nullifies `window.opener` — research Pitfall 6).
+
+### Settings UI State Machine
+
+`src/components/dashboard/SettingsModal.tsx` renders one of four states per provider via the shared `OAuthSectionForm` subcomponent (eliminates triplicate JSX for GitHub / Linear / Slack):
+
+1. **Env precedence active** — env or file has a token → manual form is shown, OAuth UI suppressed (D-09)
+2. **OAuth connected** — green badge with `accountName`, inline `Confirm disconnect` / `Keep connected` buttons
+3. **OAuth disconnected-reconnect** — amber "Connection lost" banner + Reconnect button. Triggered by `prevOAuthRef` transition tracking: when a provider flips from `connected=true` to `connected=false` during a config status refetch, the banner appears. Explicit user-initiated disconnects reset `prevOAuthRef` so they do not show this banner.
+4. **Not configured** — "Connect via {Provider} OAuth" button + "or use API key instead" escape hatch
+
+`src/components/dashboard/WelcomeHero.tsx` (D-06) uses the same `openOAuthPopup` helper for unconnected integrations — onboarding defaults to OAuth with a small "or use API key" fallback link.
+
+### Popup Client Helper
+
+`src/lib/oauth-client.ts` — `openOAuthPopup(provider, onSuccess, onError)`:
+- Synchronous `window.open()` inside the click handler (research Pitfall 5 — async `window.open()` is blocked by browsers as a programmatic popup)
+- Message listener filtered by `event.origin === window.location.origin`, `event.data?.type === 'oauth-callback'`, and `event.data?.provider === provider` — avoids cross-talk with other `postMessage` traffic
+- 500ms popup-closed poll removes the listener if the user dismisses the popup without completing OAuth
+
+### Slack Team Member Filtering (D-12)
+
+`src/lib/slack.ts` reads `SLACK_TEAM_MEMBER_IDS` via sync `getConfig()` (not OAuth-mapped, so no async needed). Splits on both `,` and `\n` so the Settings UI textarea accepts either format. When the filter is non-empty, the `userMap` population skips users whose IDs are not in the list — every downstream metric (response times, overload indicators, channel activity) automatically scopes to the roster.
+
+`src/types/slack.ts` requires a `teamMemberFilter: number | null` on `SlackMetrics` — the `null` sentinel ("no filter active") is unambiguous in the SlackSection header conditional, and the required field forces tests to supply a value.
+
+### Smoke Tests (D-10)
+
+`src/lib/slack.test.ts` uses `describe.skipIf(!process.env.SLACK_BOT_TOKEN || !CHANNEL_IDS?.length)` — tests only run when live Slack credentials are present. They validate the `SlackMetrics` shape, channel activity structure, overload indicator fields, and `teamMemberFilter` sentinel. See [docs/slack-setup.md](docs/slack-setup.md) for Slack app creation, scope configuration, bot installation, and channel ID discovery.
 
 ---
 
@@ -674,7 +761,6 @@ CREATE TABLE IF NOT EXISTS health_snapshots (
 - Recharts `activeLabel` requires `String()` cast; `ResponsiveContainer` needs explicit pixel heights and `minWidth={0}`
 - React hooks must be called before any conditional early returns (Rules of Hooks)
 - Local LLMs (Ollama) frequently ignore prompt instructions — compensated with JSON mode, temperature 0, and post-processing
-- Slack integration has not been verified with a live workspace
+- Slack integration code paths are complete with smoke tests (`src/lib/slack.test.ts`); end-to-end confirmation against a live workspace is deferred to the backlog (Phase 999.4)
 - Server-side in-memory cache is lost on restart (no cross-worker sharing), but SQLite snapshots persist across restarts
 - SQLite stores one health score snapshot per day — sub-daily granularity is not tracked
-- OAuth foundation is in place (token encryption, storage, config fallback) but the login/callback routes and "Connect via OAuth" buttons are not yet implemented — users still configure integrations via PAT/API key in the Settings UI

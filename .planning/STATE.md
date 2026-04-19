@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase complete — ready for verification
-stopped_at: "Checkpoint: Task 2 awaiting user verification of both apps with shared data layer"
-last_updated: "2026-04-07T02:03:55.183Z"
+status: Executing Phase 04
+stopped_at: "Plan 04-03 complete; ready for Plan 04-04 (Slack verification, live workspace, smoke tests)"
+last_updated: "2026-04-18T23:48:00.000Z"
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 8
-  total_plans: 23
-  completed_plans: 23
+  total_plans: 31
+  completed_plans: 28
+  percent: 90
 ---
 
 # Project State
@@ -19,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Give engineering leaders a single view of team health — one score, backed by real data — so problems surface before they become crises.
-**Current focus:** Phase 05 — shared-data-layer
+**Current focus:** Phase 04 — oauth-slack-verification
 
 ## Current Position
 
-Phase: 05 (shared-data-layer) — EXECUTING
-Plan: 5 of 5
+Phase: 04 (oauth-slack-verification) — EXECUTING
+Plan: 4 of 4
 
 ## Performance Metrics
 
@@ -68,6 +69,9 @@ Plan: 5 of 5
 | Phase 05-shared-data-layer P03 | 5 | 2 tasks | 7 files |
 | Phase 05-shared-data-layer P04 | 25 | 2 tasks | 5 files |
 | Phase 05 P05 | 25 | 1 tasks | 8 files |
+| Phase 04 P01 | 35min | 2 tasks | 19 files |
+| Phase 04 P02 | 2min | 2 tasks | 8 files |
+| Phase 04 P03 | 12min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -122,6 +126,18 @@ Recent decisions affecting current work:
 - [Phase 05-shared-data-layer]: requested_reviewers not in StoredPR schema; pendingPRs empty in refactored github.ts — review bottleneck pending bars show 0; follow-up: add requested_reviewers column to shared pull_requests table
 - [Phase 05]: readSharedGitHubData/readSharedLinearData signatures changed from (dbPath) to (repos[], dbPath) for explicit filtering; route callers pass [] to read all repos
 - [Phase 05]: Team.repos set to [] in mapStoredTeamToTeam — repo mapping is app-specific, not in shared schema
+- [Phase 04]: Slack login uses sync getConfig for SLACK_CLIENT_ID — OAuth-app credentials are not in OAUTH_KEY_TO_PROVIDER map, so sync is sufficient and avoids pointless async overhead
+- [Phase 04]: Arctic OAuth2Tokens.refreshToken() throws on missing refresh_token — wrap with hasRefreshToken() guard; same treatment for accessTokenExpiresAt() which throws if expires_in is missing
+- [Phase 04]: Provider identity lookup (GitHub /user, Linear viewer GraphQL, Slack team.name) is best-effort — wrapped in try/catch; failures do not abort OAuth flow, accountName falls back to null
+- [Phase 04]: Popup postMessage envelope shape `{ type: 'oauth-callback', provider, success, accountName? | reason? }` — `type` field lets the Settings UI filter messages; target origin is window.location.origin
+- [Phase 04]: Popup HTML response sets no Cross-Origin-Opener-Policy header (preserves window.opener per research Pitfall 6)
+- [Phase 04]: Separate state cookie per provider (github_oauth_state, linear_oauth_state, slack_oauth_state) — httpOnly, sameSite=lax, secure in production only, maxAge 10min
+- [Phase 04]: openOAuthPopup helper must call window.open synchronously inside the click handler (research Pitfall 5); origin+type+provider-filtered message listener avoids cross-talk; 500ms popup-closed poll cleans up listener on dismiss
+- [Phase 04]: OAuthSectionForm subcomponent centralizes the 4-state auth UI (not configured / OAuth connected / env-config active / disconnected-reconnect) for GitHub/Linear/Slack via PROVIDER_LABELS interpolation — avoids triplicated JSX
+- [Phase 04]: "Connection lost" detection via prevOAuthRef transition tracking — connected->disconnected transitions from config status refetch flip oauthDisconnected; explicit disconnects reset prevOAuthRef so deliberate disconnects don't render as revocations (D-08/INTG-04)
+- [Phase 04]: Env var precedence over OAuth in UI (D-09): when status.{provider}=true but status.oauth.{provider}.connected=false, render manual fields and suppress OAuth UI entirely
+- [Phase 04]: SLACK_TEAM_MEMBER_IDS uses sync getConfig (not getConfigAsync) because the key is not OAuth-mapped; split regex /[,\n]/ supports both comma and newline delimited input from the settings textarea
+- [Phase 04]: teamMemberFilter: number | null on SlackMetrics (required, not optional) — forces test mocks to supply a value and makes section-header conditional unambiguous
 
 ### Pending Todos
 
@@ -148,6 +164,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T02:03:55.180Z
-Stopped at: Checkpoint: Task 2 awaiting user verification of both apps with shared data layer
+Last session: 2026-04-18T23:48:00.000Z
+Stopped at: Completed 04-03-PLAN.md — ready for 04-04 (Slack verification, live workspace, smoke tests)
 Resume file: None
