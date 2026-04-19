@@ -416,7 +416,7 @@ Gear icon → modal with sidebar navigation (GitHub, Linear, Slack, DORA, AI, Sc
 
 ### Code
 
-`src/lib/config.ts` — exports `getConfig(key)`, `getConfigAsync(key)` (triple-layer with OAuth fallback), `saveConfig(values)`, `getConfigStatus()`, `getConfigStatusAsync()` (includes OAuth connection state per provider), `clearConfigCache()`.
+`src/lib/config.ts` — exports `getConfig(key)` (sync, env + `.config.local.json`), `getConfigAsync(key)` (triple-layer with OAuth fallback), `saveConfig(values)`, `getConfigStatus()` (async; includes OAuth connection state per provider), `clearConfigCache()`.
 
 ---
 

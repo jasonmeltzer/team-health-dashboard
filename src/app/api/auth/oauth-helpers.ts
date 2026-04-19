@@ -46,7 +46,7 @@ export function closePopupWithError(provider: string, reason: string): Response 
   const safeProvider = sanitizeForHtml(provider);
   const safeReason = sanitizeForHtml(reason);
   const html = `<!DOCTYPE html><html><head><title>OAuth Error</title></head><body>
-<p>Connection failed. ${safeReason}. Close this window and try again.</p>
+<p>Connection failed. ${safeReason}. This window will close automatically.</p>
 <script>
   (function () {
     try {
@@ -57,6 +57,7 @@ export function closePopupWithError(provider: string, reason: string): Response 
         );
       }
     } catch (e) {}
+    setTimeout(function () { window.close(); }, 3000);
   })();
 </script></body></html>`;
 
