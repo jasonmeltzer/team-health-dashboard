@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Executing Phase 04
-stopped_at: "Plan 04-03 complete; ready for Plan 04-04 (Slack verification, live workspace, smoke tests)"
-last_updated: "2026-04-18T23:48:00.000Z"
+status: Phase 04 complete
+stopped_at: "Phase 04 complete — PR #19 open; live Slack verification deferred to Backlog 999.4"
+last_updated: "2026-04-19T00:25:35.000Z"
 progress:
   total_phases: 11
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 31
-  completed_plans: 28
-  percent: 90
+  completed_plans: 29
+  percent: 94
 ---
 
 # Project State
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Current Position
 
-Phase: 04 (oauth-slack-verification) — EXECUTING
-Plan: 4 of 4
+Phase: 04 (oauth-slack-verification) — COMPLETE
+Plan: 4 of 4 complete; PR #19 open
 
 ## Performance Metrics
 
@@ -72,6 +72,7 @@ Plan: 4 of 4
 | Phase 04 P01 | 35min | 2 tasks | 19 files |
 | Phase 04 P02 | 2min | 2 tasks | 8 files |
 | Phase 04 P03 | 12min | 2 tasks | 8 files |
+| Phase 04 P04 | 5min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -138,6 +139,9 @@ Recent decisions affecting current work:
 - [Phase 04]: Env var precedence over OAuth in UI (D-09): when status.{provider}=true but status.oauth.{provider}.connected=false, render manual fields and suppress OAuth UI entirely
 - [Phase 04]: SLACK_TEAM_MEMBER_IDS uses sync getConfig (not getConfigAsync) because the key is not OAuth-mapped; split regex /[,\n]/ supports both comma and newline delimited input from the settings textarea
 - [Phase 04]: teamMemberFilter: number | null on SlackMetrics (required, not optional) — forces test mocks to supply a value and makes section-header conditional unambiguous
+- [Phase 04]: Slack smoke tests use describe.skipIf(!SLACK_BOT_TOKEN || !CHANNEL_IDS) — tests present in source for documentation value, skipped automatically in CI/dev without live credentials
+- [Phase 04]: Slack setup guide documents BOTH OAuth (Option A, recommended) and bot-token (Option B) paths to reflect the dashboard's real triple-layer config
+- [Phase 04]: Live Slack workspace verification (INTG-06 end-to-end) deferred to Backlog Phase 999.4 per user direction — smoke tests + docs shipped, live test requires user's workspace
 
 ### Pending Todos
 
@@ -164,6 +168,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-18T23:48:00.000Z
-Stopped at: Completed 04-03-PLAN.md — ready for 04-04 (Slack verification, live workspace, smoke tests)
+Last session: 2026-04-19T00:25:35.000Z
+Stopped at: Completed 04-04-PLAN.md — Phase 04 complete; PR #19 open; Backlog 999.4 queued for live Slack verification
 Resume file: None

@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 1.1: Code Review Fixes** - Fix all critical/high/medium issues from full-repo code review (INSERTED)
 - [ ] **Phase 2: Persistence & Resilience** - Add SQLite snapshot storage, historical trend charts, caching improvements, and rate-limit resilience
 - [ ] **Phase 3: Scoring Transparency & Onboarding** - Surface per-signal score breakdowns, customizable weights, and a first-run setup wizard
-- [ ] **Phase 4: OAuth & Slack Verification** - Add OAuth auth flows for all three integrations and verify Slack with a live workspace
+- [x] **Phase 4: OAuth & Slack Verification** - Add OAuth auth flows for all three integrations and verify Slack with a live workspace (completed 2026-04-18; live-workspace verification deferred to Backlog 999.4)
 - [x] **Phase 5: Shared Data Layer** - Extract GitHub/Linear data fetching and SQLite storage into a reusable npm package for cross-project data sharing (completed 2026-04-07)
 
 ## Phase Details
@@ -144,13 +144,13 @@ Plans:
   3. OAuth tokens refresh automatically — user does not need to reconnect after token expiry
   4. Existing env var and `.config.local.json` auth paths continue to work unchanged alongside OAuth
   5. Slack integration returns real data from a verified live workspace with no errors
-**Plans:** 3/4 plans complete
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 04-01-PLAN.md — OAuth backend foundation (encryption, DB, Arctic providers, triple-layer config)
 - [x] 04-02-PLAN.md — OAuth login and callback routes for GitHub, Linear, and Slack
 - [x] 04-03-PLAN.md — Settings UI OAuth connected/disconnected states and WelcomeHero OAuth flow
-- [ ] 04-04-PLAN.md — Slack verification (live workspace, team member filtering, smoke tests)
+- [x] 04-04-PLAN.md — Slack smoke tests, setup guide, README/ARCHITECTURE docs, PR (live-workspace verification deferred to Backlog 999.4)
 
 ### Phase 5: Shared Data Layer
 **Goal**: GitHub and Linear data fetching + SQLite storage are extracted into a reusable npm package (team-data-core) that this project and other repos can depend on, with shared tables for common data (PRs, reviews, deployments, issues, cycles, teams) and per-app tables for application-specific data (health_snapshots, cycle_snapshots)
@@ -189,11 +189,27 @@ Phases execute in numeric order: 1 -> 1.1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.3 -> 03.4
 | 3.3 Scope Churn & AI (INSERTED) | 2/2 | Complete   | 2026-04-04 |
 | 03.4 Carry-Over Classification (INSERTED) | 2/2 | Complete    | 2026-04-06 |
 | 5. Shared Data Layer | 5/5 | Complete   | 2026-04-07 |
-| 4. OAuth & Slack Verification | 2/4 | In Progress | - |
+| 4. OAuth & Slack Verification | 4/4 | Complete | 2026-04-18 |
 
 ## Backlog
 
-(empty — promoted 999.3 to phase 03.3)
+### Phase 999.4: Manual Slack live-workspace verification (deferred from Phase 04)
+
+**Goal:** Perform the end-to-end live verification of Slack integration that was deferred during Phase 04 execution — connect a real Slack workspace via OAuth, confirm `fetchSlackMetrics` returns real data, exercise the `teamMemberFilter` roster scoping in a real workspace, and confirm `SlackSection` renders channel activity / response times / overload indicators correctly.
+
+**Why deferred:** Phase 04-04 was executed autonomously (per user direction); smoke tests and docs shipped, but live-workspace confirmation requires user's Slack app + real channel IDs.
+
+**Prerequisites (already shipped):**
+- OAuth login/callback routes (04-02)
+- SettingsModal OAuth UI + `teamMemberFilter` field (04-03)
+- Smoke tests in `src/lib/slack.test.ts` (04-04)
+- `docs/slack-setup.md` step-by-step guide (04-04)
+
+**Success criteria:**
+- Slack OAuth connect → token stored → `fetchSlackMetrics` returns non-empty metrics
+- `teamMemberFilter` (set via Settings UI) correctly scopes response-time + overload calculations
+- No console errors, no "not configured" fallback triggered
+- `SlackSection` renders all three cards with non-zero live data
 
 ### Phase 6: Integration test app for team-data-core
 
