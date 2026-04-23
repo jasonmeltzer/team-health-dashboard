@@ -525,9 +525,11 @@ All callback responses return HTML that `postMessage`s `{ type: 'oauth-callback'
 1. **Env precedence active** — env or file has a token → manual form is shown, OAuth UI suppressed (D-09)
 2. **OAuth connected** — green badge with `accountName`, inline `Confirm disconnect` / `Keep connected` buttons
 3. **OAuth disconnected-reconnect** — amber "Connection lost" banner + Reconnect button. Triggered by `prevOAuthRef` transition tracking: when a provider flips from `connected=true` to `connected=false` during a config status refetch, the banner appears. Explicit user-initiated disconnects reset `prevOAuthRef` so they do not show this banner.
-4. **Not configured** — "Connect via {Provider} OAuth" button + "or use API key instead" escape hatch
+4. **Not configured** — split into two sub-states (Phase 04.1):
+   - **Provisioned** (CLIENT_ID, CLIENT_SECRET, and OAUTH_ENCRYPTION_KEY all set): "Connect via {Provider} OAuth" button + "or use API key instead" escape hatch
+   - **Not provisioned** (any of the three env vars missing): "Set up OAuth" link opens the in-app `DocViewerModal` showing the provider's setup guide; Connect button is suppressed to avoid dead-end clicks
 
-`src/components/dashboard/WelcomeHero.tsx` (D-06) uses the same `openOAuthPopup` helper for unconnected integrations — onboarding defaults to OAuth with a small "or use API key" fallback link.
+`src/components/dashboard/WelcomeHero.tsx` (D-06) uses the same `openOAuthPopup` helper for unconnected integrations — onboarding defaults to OAuth with a small "or use API key" fallback link. WelcomeHero applies the same provisioned/not-provisioned gating as SettingsModal.
 
 ### Popup Client Helper
 
@@ -535,6 +537,37 @@ All callback responses return HTML that `postMessage`s `{ type: 'oauth-callback'
 - Synchronous `window.open()` inside the click handler (research Pitfall 5 — async `window.open()` is blocked by browsers as a programmatic popup)
 - Message listener filtered by `event.origin === window.location.origin`, `event.data?.type === 'oauth-callback'`, and `event.data?.provider === provider` — avoids cross-talk with other `postMessage` traffic
 - 500ms popup-closed poll removes the listener if the user dismisses the popup without completing OAuth
+- `onError(errorMessage, reason?, detail?)` — `reason === 'not-configured'` carries `detail.missingVars: string[]` so the parent (SettingsModal / WelcomeHero) can render `ConnectErrorAlert` listing the exact env vars to set
+
+### Guided-Setup UX (Phase 04.1)
+
+Added to close the dead-end "bare 500 OAuth not configured" error that surfaced during Phase 04 manual testing. When a user attempts to Connect without full provisioning, they now hit one of three guided paths instead of a stack trace.
+
+**Provisioning status** (`src/lib/config.ts`):
+- `getConfigStatus()` exposes `oauthProvisioned: { github, linear, slack }` — each entry is `{ clientId: bool, clientSecret: bool, encryptionKey: bool }`. Booleans only; no raw credential values ever reach the client.
+
+**Pre-flight check** (`src/app/api/auth/oauth-helpers.ts`):
+- `assertOAuthProvisioned(provider)` — runs at the top of each login route before any OAuth redirect. Returns `null` on success or an `HTMLResponse` on failure.
+- `closePopupWithSetupError(provider, missingVars)` — builds a 400 HTML response that `postMessage`s `{ type: 'oauth-callback', provider, success: false, reason: 'not-configured', missingVars }` to `window.opener` and auto-closes after 3000ms. Same envelope shape as the existing `closePopupWithError` helper — extended only with `reason` and `missingVars`, so existing listeners ignore the extra fields gracefully.
+- `OAUTH_ENCRYPTION_KEY` is treated as one of the potentially-missing vars — users never complete the provider consent step only to fail at the callback's first encrypt attempt.
+
+**Doc viewer** (`src/components/dashboard/DocViewerModal.tsx` + `DocViewerModalDynamic.tsx`):
+- Renders exactly 3 OAuth setup docs — `github-oauth-setup`, `linear-oauth-setup`, `slack-setup` — via `react-markdown@10` + `remark-gfm@4` inside a Radix Dialog (layered at `z-[60]` above SettingsModal's `z-50`).
+- Markdown is loaded at build time via `next.config.mjs` → `turbopack.rules` with `type: "raw"` (no runtime fetch, no `?raw` query suffix).
+- `DocViewerModalDynamic` wraps the real component via `next/dynamic({ ssr: false })` so `react-markdown`, `remark-gfm`, and the 3 markdown strings stay in a lazy chunk (~43 KB gzipped — under the 50 KB budget). Callers in SettingsModal and WelcomeHero import `DocViewerModalDynamic`; `DocSlug` is imported directly from `./DocViewerModal` (the dynamic wrapper does not re-export types).
+- TypeScript accepts `*.md` imports via `src/types/markdown.d.ts` ambient declaration.
+
+**Manual-field help** (`src/lib/oauth-help-strings.ts`):
+- Each of `GITHUB_TOKEN`, `LINEAR_API_KEY`, `SLACK_BOT_TOKEN` manual fields in SettingsModal now renders both a `?` HelpPopover (1-line hint) and a "Full guide" link that opens the corresponding `DocViewerModal` — same help parity as the OAuth side.
+
+**Error surface** (`src/components/dashboard/ConnectErrorAlert.tsx`):
+- Rendered by both SettingsModal and WelcomeHero when the popup reports `reason === 'not-configured'`. Lists `missingVars` and includes a "Set up OAuth" link that opens the same `DocViewerModal`. Dismissable.
+
+**Setup docs** (in `docs/`):
+- `docs/github-oauth-setup.md` — prerequisites → OAuth app creation → scopes (`repo`, `read:org`, with write-access callout) → redirect URL → client credentials → `.env.local` → troubleshooting GFM table.
+- `docs/linear-oauth-setup.md` — same shape, adapted: full-access OAuth (no scope picker), 24h access token + rotate-on-use refresh token behavior.
+- `docs/slack-setup.md` — pre-existing; received a `## See Also` cross-link block.
+- README.md's OAuth section now references all three per-provider docs.
 
 ### Slack Team Member Filtering (D-12)
 
