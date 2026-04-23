@@ -4,9 +4,10 @@ const nextConfig = {
   turbopack: {
     rules: {
       // Load the 3 OAuth setup docs as raw strings so DocViewerModal can
-      // render them without a runtime fetch. Scoped by glob so other *.md
-      // files (README.md etc.) are untouched.
-      "docs/{github-oauth,linear-oauth,slack}-setup.md": {
+      // render them without a runtime fetch. Glob anchors on *.md basename;
+      // DocViewerModal is the only site that imports .md files, so this
+      // effectively scopes to the 3 OAuth setup docs it references.
+      "*.md": {
         type: "raw",
       },
     },
