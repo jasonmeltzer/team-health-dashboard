@@ -13,6 +13,11 @@ export interface ConfigStatus {
     linear: { connected: boolean; accountName: string | null };
     slack: { connected: boolean; accountName: string | null };
   };
+  oauthProvisioned?: {
+    github: { clientId: boolean; clientSecret: boolean; encryptionKey: boolean };
+    linear: { clientId: boolean; clientSecret: boolean; encryptionKey: boolean };
+    slack: { clientId: boolean; clientSecret: boolean; encryptionKey: boolean };
+  };
 }
 
 export function useConfigStatus(refreshKey?: number) {
@@ -31,6 +36,7 @@ export function useConfigStatus(refreshKey?: number) {
           dora: !!json.data.dora,
           aiProvider: json.data.aiProvider,
           oauth: json.data.oauth || undefined,
+          oauthProvisioned: json.data.oauthProvisioned || undefined,
         });
       }
     } catch {

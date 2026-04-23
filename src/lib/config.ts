@@ -99,6 +99,23 @@ export async function getConfigStatus(): Promise<Record<string, unknown>> {
     aiProvider,
     dora: githubConfigured,
     oauth: oauthStatus,
+    oauthProvisioned: {
+      github: {
+        clientId: !!getConfig("GITHUB_CLIENT_ID"),
+        clientSecret: !!getConfig("GITHUB_CLIENT_SECRET"),
+        encryptionKey: !!getConfig("OAUTH_ENCRYPTION_KEY"),
+      },
+      linear: {
+        clientId: !!getConfig("LINEAR_CLIENT_ID"),
+        clientSecret: !!getConfig("LINEAR_CLIENT_SECRET"),
+        encryptionKey: !!getConfig("OAUTH_ENCRYPTION_KEY"),
+      },
+      slack: {
+        clientId: !!getConfig("SLACK_CLIENT_ID"),
+        clientSecret: !!getConfig("SLACK_CLIENT_SECRET"),
+        encryptionKey: !!getConfig("OAUTH_ENCRYPTION_KEY"),
+      },
+    },
     cacheTtl: {
       github: getConfig("CACHE_TTL_GITHUB") || "",
       linear: getConfig("CACHE_TTL_LINEAR") || "",
