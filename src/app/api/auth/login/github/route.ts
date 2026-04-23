@@ -1,6 +1,7 @@
 import { generateState } from "arctic";
 import { cookies } from "next/headers";
 import { getGitHubProvider } from "@/lib/oauth-providers";
+import { assertOAuthProvisioned, closePopupWithSetupError } from "@/app/api/auth/oauth-helpers";
 
 // Scopes:
 //   repo     — required for PRs, reviews, releases on private repos (grants write per GitHub limitation — no read-only repo scope)
@@ -9,9 +10,15 @@ import { getGitHubProvider } from "@/lib/oauth-providers";
 const GITHUB_SCOPES = ["repo", "read:org"];
 
 export async function GET(): Promise<Response> {
+  const { missingVars } = assertOAuthProvisioned("github");
+  if (missingVars.length > 0) {
+    return closePopupWithSetupError("github", missingVars);
+  }
+
   const github = getGitHubProvider();
   if (!github) {
-    return new Response("GitHub OAuth not configured", { status: 500 });
+    // Second-line defense — should be unreachable after the pre-flight above.
+    return closePopupWithSetupError("github", ["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"]);
   }
 
   const state = generateState();

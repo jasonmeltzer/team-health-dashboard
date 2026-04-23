@@ -2,14 +2,21 @@ import { generateState } from "arctic";
 import { cookies } from "next/headers";
 import { getConfig } from "@/lib/config";
 import { SLACK_OAUTH_CONFIG } from "@/lib/oauth-providers";
+import { assertOAuthProvisioned, closePopupWithSetupError } from "@/app/api/auth/oauth-helpers";
 
 // Slack uses manual OAuth v2 — Arctic's Slack provider is OIDC-only and does NOT produce
 // bot tokens. See 04-RESEARCH.md Pitfall 3 and the Slack Bot Token OAuth pattern.
 
 export async function GET(): Promise<Response> {
+  const { missingVars } = assertOAuthProvisioned("slack");
+  if (missingVars.length > 0) {
+    return closePopupWithSetupError("slack", missingVars);
+  }
+
   const clientId = getConfig("SLACK_CLIENT_ID");
   if (!clientId) {
-    return new Response("Slack OAuth not configured", { status: 500 });
+    // Second-line defense — should be unreachable after the pre-flight above.
+    return closePopupWithSetupError("slack", ["SLACK_CLIENT_ID"]);
   }
 
   const state = generateState();

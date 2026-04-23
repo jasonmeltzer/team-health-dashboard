@@ -1,15 +1,22 @@
 import { generateState } from "arctic";
 import { cookies } from "next/headers";
 import { getLinearProvider } from "@/lib/oauth-providers";
+import { assertOAuthProvisioned, closePopupWithSetupError } from "@/app/api/auth/oauth-helpers";
 
 // Linear OAuth: read scope covers all dashboard GraphQL queries (teams, cycles, issues, issueHistory).
 // See 04-RESEARCH.md scope matrix.
 const LINEAR_SCOPES = ["read"];
 
 export async function GET(): Promise<Response> {
+  const { missingVars } = assertOAuthProvisioned("linear");
+  if (missingVars.length > 0) {
+    return closePopupWithSetupError("linear", missingVars);
+  }
+
   const linear = getLinearProvider();
   if (!linear) {
-    return new Response("Linear OAuth not configured", { status: 500 });
+    // Second-line defense — should be unreachable after the pre-flight above.
+    return closePopupWithSetupError("linear", ["LINEAR_CLIENT_ID", "LINEAR_CLIENT_SECRET"]);
   }
 
   const state = generateState();
