@@ -161,6 +161,13 @@ After changing scopes in step 2, you **must reinstall the app** from step 4 — 
 
 ---
 
+## See Also
+
+- [./github-oauth-setup.md](./github-oauth-setup.md) — GitHub OAuth setup
+- [./linear-oauth-setup.md](./linear-oauth-setup.md) — Linear OAuth setup
+
+---
+
 ## What's Next
 
 Once Slack is wired up, the dashboard's Slack section shows:
