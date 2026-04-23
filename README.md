@@ -184,6 +184,14 @@ OAuth is the recommended auth method for new users. It avoids hand-copying long-
 
 **Slack-specific setup** (scope selection, redirect URL config, bot installation, finding channel IDs, team member filtering): see [docs/slack-setup.md](docs/slack-setup.md).
 
+### Per-Provider Setup Guides
+
+Step-by-step instructions for creating an OAuth app with each provider and wiring the resulting credentials into the dashboard:
+
+- [GitHub OAuth setup](docs/github-oauth-setup.md) — create an OAuth App at github.com/settings/developers, configure scopes (`repo`, `read:org`), wire `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` / `OAUTH_ENCRYPTION_KEY` into `.env.local`.
+- [Linear OAuth setup](docs/linear-oauth-setup.md) — create an OAuth application at linear.app/settings/api/applications, wire `LINEAR_CLIENT_ID` / `LINEAR_CLIENT_SECRET` / `OAUTH_ENCRYPTION_KEY`.
+- [Slack setup](docs/slack-setup.md) — create a Slack app, choose OAuth v2 (recommended) or a bot token; documents `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` and `SLACK_BOT_TOKEN` paths.
+
 **Backward compatibility:** if `GITHUB_TOKEN`, `LINEAR_API_KEY`, or `SLACK_BOT_TOKEN` is set in `.env.local` or `.config.local.json`, that value takes precedence over the OAuth token and the Settings UI shows the manual field (not the OAuth connected state). Delete the env/file entry to switch to OAuth.
 
 **Disconnect:** Settings → {Provider} → **Disconnect {Provider}** → **Confirm disconnect**. The encrypted token is removed from `oauth_tokens`; the provider's access token at the provider side is unaffected (revoke it in the provider's developer console if needed).
