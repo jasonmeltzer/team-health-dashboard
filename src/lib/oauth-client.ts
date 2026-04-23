@@ -5,16 +5,25 @@
  * window.open() when it is not invoked as a direct response to a user
  * gesture (research Pitfall 5).
  *
- * Listens for { type: 'oauth-callback', provider, success, accountName?, reason? }
- * postMessage envelopes from the popup (see Plan 04-02 oauth-helpers.ts).
+ * Listens for { type: 'oauth-callback', provider, success, accountName?, reason?, missingVars? }
+ * postMessage envelopes from the popup (see Plan 04-02 oauth-helpers.ts and
+ * Plan 04.1-02 closePopupWithSetupError).
+ *
+ * onError receives an optional third `detail` arg carrying missingVars when
+ * the popup reports reason: 'not-configured'. Callers that ignore the arg
+ * continue to work unchanged (backward compat).
  */
 
 export type OAuthProvider = "github" | "linear" | "slack";
 
+export interface OAuthErrorDetail {
+  missingVars?: string[];
+}
+
 export function openOAuthPopup(
   provider: OAuthProvider,
   onSuccess: (provider: OAuthProvider, accountName: string | null) => void,
-  onError: (provider: OAuthProvider, reason: string) => void
+  onError: (provider: OAuthProvider, reason: string, detail?: OAuthErrorDetail) => void
 ) {
   const popup = window.open(
     `/api/auth/login/${provider}`,
@@ -38,13 +47,17 @@ export function openOAuthPopup(
     if (event.data.success) {
       onSuccess(provider, event.data.accountName ?? null);
     } else {
-      onError(provider, event.data.reason || "unknown");
+      const reason = event.data.reason || "unknown";
+      const detail: OAuthErrorDetail =
+        reason === "not-configured" && Array.isArray(event.data.missingVars)
+          ? { missingVars: event.data.missingVars as string[] }
+          : {};
+      onError(provider, reason, detail);
     }
   };
 
   window.addEventListener("message", handleMessage);
 
-  // Cleanup listener if user closes popup without completing OAuth
   const pollClosed = setInterval(() => {
     if (popup.closed) {
       clearInterval(pollClosed);
