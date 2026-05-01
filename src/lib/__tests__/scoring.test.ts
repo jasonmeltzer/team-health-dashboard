@@ -125,6 +125,7 @@ function makeSlack(overrides: Partial<{
       channelsActive: 3,
       isOverloaded: true,
     })),
+    teamMemberFilter: null,
   };
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { fetchDORAMetrics } from "@/lib/dora";
-import { getConfig } from "@/lib/config";
+import { getConfig, getConfigAsync } from "@/lib/config";
 import { RateLimitError } from "@/lib/errors";
 import { getOrFetch, buildCacheKey, getTTL, cache } from "@/lib/cache";
 
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const owner = getConfig("GITHUB_ORG");
     const repo = getConfig("GITHUB_REPO");
 
-    if (!owner || !repo || !getConfig("GITHUB_TOKEN")) {
+    if (!owner || !repo || !(await getConfigAsync("GITHUB_TOKEN"))) {
       return Response.json({ notConfigured: true });
     }
 

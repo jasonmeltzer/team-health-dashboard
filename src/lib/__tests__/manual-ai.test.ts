@@ -112,6 +112,7 @@ function makeSlack(): SlackMetrics {
     overloadIndicators: [
       { userId: "u1", userName: "Bob", messagesSent: 100, avgResponseMinutes: 5, channelsActive: 3, isOverloaded: true },
     ],
+    teamMemberFilter: null,
   };
 }
 

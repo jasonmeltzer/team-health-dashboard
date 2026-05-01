@@ -2,7 +2,7 @@
 
 AI-powered engineering team health dashboard that aggregates metrics from GitHub, Linear, and Slack, computes a deterministic health score, and generates actionable weekly insights using an LLM.
 
-> **Note:** The Slack integration and AI features (Ollama and Anthropic) have not yet been tested end-to-end.
+> **Note:** The code paths for Slack and AI (Ollama and Anthropic) are complete and covered by smoke tests (see `src/lib/slack.test.ts`), but end-to-end verification against a live Slack workspace is deferred to a future backlog phase. OAuth connect/refresh/disconnect flows have been verified for GitHub and Linear.
 
 ## Why This Exists
 
@@ -143,12 +143,60 @@ There are two ways to configure integrations:
 | `LINEAR_TEAM_ID` | For Linear section | Linear team ID |
 | `SLACK_BOT_TOKEN` | For Slack section | Slack Bot OAuth token |
 | `SLACK_CHANNEL_IDS` | For Slack section | Comma-separated channel IDs |
+| `SLACK_TEAM_MEMBER_IDS` | No | Comma- or newline-delimited Slack user IDs (e.g. `U01ABC,U02DEF`). When set, scopes response-time / overload metrics to just these users. Leave blank for all workspace members. |
 | `DORA_DEPLOYMENT_SOURCE` | No | `auto` (default), `deployments`, `releases`, or `merges` |
 | `DORA_ENVIRONMENT` | No | Filter deployments by environment (e.g., `production`) |
 | `DORA_INCIDENT_LABELS` | No | Comma-separated issue labels (default: `incident,hotfix,production-bug`) |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | For GitHub OAuth | OAuth App credentials (alternative to `GITHUB_TOKEN`) |
+| `LINEAR_CLIENT_ID` / `LINEAR_CLIENT_SECRET` | For Linear OAuth | OAuth App credentials (alternative to `LINEAR_API_KEY`) |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | For Slack OAuth | OAuth App credentials (alternative to `SLACK_BOT_TOKEN`) |
+| `OAUTH_ENCRYPTION_KEY` | When using OAuth | AES key for token encryption at rest. Generate: `openssl rand -base64 32` |
+| `APP_BASE_URL` | When using OAuth | Base URL for OAuth callbacks (default: `http://localhost:3000`) |
 | `PORT` | No | Dev server port (default: 5555). Must be a shell env var, not in `.env.local` |
 
 The dashboard gracefully handles missing integrations — unconfigured sections show placeholders explaining what they provide and how to enable them.
+
+### OAuth Authentication
+
+OAuth is the recommended auth method for new users. It avoids hand-copying long-lived PATs and produces encrypted, revocable tokens stored in `data/health.db`. API keys remain supported as a power-user escape hatch — env vars and `.config.local.json` always take precedence over OAuth tokens.
+
+**Supported providers:**
+
+| Provider | Library        | Token type returned                           |
+| -------- | -------------- | --------------------------------------------- |
+| GitHub   | Arctic v3      | Non-expiring OAuth App token (`repo read:org`) |
+| Linear   | Arctic v3      | 24h access + rotating refresh token (`read`)  |
+| Slack    | Manual OAuth v2 | Non-expiring bot token (`xoxb-...`)          |
+
+**Setup:**
+
+1. Create an OAuth app in each provider's developer console (GitHub → Settings → Developers → OAuth Apps; Linear → Settings → API → OAuth Applications; Slack → api.slack.com/apps)
+2. Set the callback URL to `<APP_BASE_URL>/api/auth/callback/<provider>` (e.g. `http://localhost:5555/api/auth/callback/github`)
+3. Add `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` (or the Linear/Slack equivalents) to `.env.local` or the Settings UI
+4. Generate an encryption key for at-rest token storage:
+
+   ```bash
+   openssl rand -base64 32
+   ```
+
+   Add as `OAUTH_ENCRYPTION_KEY`. Required whenever any OAuth provider is in use.
+5. Start the dashboard, open Settings, and click **Connect via {Provider} OAuth**. The popup handles consent; after you approve, the Settings modal shows **Connected as [account]**.
+
+**Slack-specific setup** (scope selection, redirect URL config, bot installation, finding channel IDs, team member filtering): see [docs/slack-setup.md](docs/slack-setup.md).
+
+### Per-Provider Setup Guides
+
+Step-by-step instructions for creating an OAuth app with each provider and wiring the resulting credentials into the dashboard:
+
+- [GitHub OAuth setup](docs/github-oauth-setup.md) — create an OAuth App at github.com/settings/developers, configure scopes (`repo`, `read:org`), wire `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` / `OAUTH_ENCRYPTION_KEY` into `.env.local`.
+- [Linear OAuth setup](docs/linear-oauth-setup.md) — create an OAuth application at linear.app/settings/api/applications, wire `LINEAR_CLIENT_ID` / `LINEAR_CLIENT_SECRET` / `OAUTH_ENCRYPTION_KEY`.
+- [Slack setup](docs/slack-setup.md) — create a Slack app, choose OAuth v2 (recommended) or a bot token; documents `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` and `SLACK_BOT_TOKEN` paths.
+
+**Backward compatibility:** if `GITHUB_TOKEN`, `LINEAR_API_KEY`, or `SLACK_BOT_TOKEN` is set in `.env.local` or `.config.local.json`, that value takes precedence over the OAuth token and the Settings UI shows the manual field (not the OAuth connected state). Delete the env/file entry to switch to OAuth.
+
+**Disconnect:** Settings → {Provider} → **Disconnect {Provider}** → **Confirm disconnect**. The encrypted token is removed from `oauth_tokens`; the provider's access token at the provider side is unaffected (revoke it in the provider's developer console if needed).
+
+**Slack live verification status:** OAuth connect, token storage, and the `teamMemberFilter` roster scoping are wired end-to-end and have smoke tests in `src/lib/slack.test.ts` (skipped automatically without `SLACK_BOT_TOKEN` + `SLACK_CHANNEL_IDS`). End-to-end confirmation against a real workspace is deferred to the backlog (Phase 999.4) pending access to a live Slack workspace.
 
 ## Project Structure
 
@@ -186,10 +234,13 @@ src/
 │   ├── scoring.ts                      # Deterministic health score computation (with configurable weights)
 │   ├── db.ts                           # SQLite singleton (better-sqlite3, WAL mode)
 │   ├── errors.ts                       # Typed errors (RateLimitError)
-│   ├── config.ts                       # Dual config reader (env vars + .config.local.json)
+│   ├── config.ts                       # Triple-layer config reader (env > file > OAuth DB)
+│   ├── oauth-crypto.ts                 # AES-128-GCM token encryption
+│   ├── oauth-db.ts                     # OAuth token CRUD with Linear inline refresh
+│   ├── oauth-providers.ts              # Arctic GitHub/Linear + Slack manual provider factories
 │   ├── utils.ts                        # Date helpers, rate limit error handling
 │   └── __tests__/                      # Vitest unit tests
-└── types/                              # TypeScript type definitions
+└── types/                              # TypeScript type definitions (includes oauth.ts)
 ```
 
 ## Design Decisions
@@ -221,7 +272,7 @@ Contributions welcome! See [ARCHITECTURE.md](ARCHITECTURE.md) for system interna
 - ~~**Historical trending** — health score trend chart with SQLite persistence~~ *(done in Phase 02)*
 - **Team-level filtering** — support for multiple repos/teams/squads
 - **Notifications** — alert when the health score drops to Warning or Critical
-- **Slack team filtering** — track only specified team members, not all channel participants
+- ~~**Slack team filtering** — track only specified team members, not all channel participants~~ *(done in Phase 04 via `SLACK_TEAM_MEMBER_IDS`)*
 - ~~**Accessibility** — ARIA labels, keyboard navigation, screen reader support~~ *(done — focus traps, keyboard nav, aria-labels added in Phase 01.1)*
 - ~~**Onboarding** — first-run experience with guided setup~~ *(done in Phase 03)*
 - ~~**Scoring transparency** — clickable score breakdown, configurable weights~~ *(done in Phase 03)*

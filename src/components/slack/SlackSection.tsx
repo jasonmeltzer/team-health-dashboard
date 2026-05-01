@@ -106,7 +106,14 @@ export function SlackSection({ refreshKey, onOpenSettings }: { refreshKey: numbe
 
   return (
     <div id="slack-section" className="space-y-4">
-      <SectionHeader title="Slack" icon={<SlackIcon />} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
+      <div className="flex items-center gap-2">
+        <SectionHeader title="Slack" icon={<SlackIcon />} timestamp={fetchedAt} cached={cached} onRefresh={refetch} refreshing={refreshing} />
+        {data.teamMemberFilter !== null && (
+          <span className="text-xs font-normal text-zinc-500 -ml-1 mb-4">
+            (filtered to {data.teamMemberFilter} members)
+          </span>
+        )}
+      </div>
       {rateLimited && (
         <RateLimitBanner
           source="Slack"

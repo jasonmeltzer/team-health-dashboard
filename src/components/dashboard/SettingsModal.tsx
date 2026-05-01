@@ -4,7 +4,17 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import { WeightSliders } from "./WeightSliders";
+import { openOAuthPopup, type OAuthProvider } from "@/lib/oauth-client";
 import type { ScoreDeduction } from "@/types/metrics";
+import DocViewerModal from "./DocViewerModalDynamic";
+import type { DocSlug } from "./DocViewerModal";
+import ConnectErrorAlert from "./ConnectErrorAlert";
+import { OAUTH_HELP_STRINGS } from "@/lib/oauth-help-strings";
+
+interface OAuthProviderStatus {
+  connected: boolean;
+  accountName: string | null;
+}
 
 interface ConfigStatus {
   github: boolean;
@@ -12,6 +22,16 @@ interface ConfigStatus {
   slack: boolean;
   dora: boolean;
   ai: boolean;
+  oauth?: {
+    github: OAuthProviderStatus;
+    linear: OAuthProviderStatus;
+    slack: OAuthProviderStatus;
+  };
+  oauthProvisioned?: {
+    github: { clientId: boolean; clientSecret: boolean; encryptionKey: boolean };
+    linear: { clientId: boolean; clientSecret: boolean; encryptionKey: boolean };
+    slack: { clientId: boolean; clientSecret: boolean; encryptionKey: boolean };
+  };
 }
 
 interface SettingsModalProps {
@@ -34,16 +54,32 @@ const SECTIONS: { key: Section; label: string; description: string }[] = [
   { key: "scoring", label: "Scoring", description: "Integration weight adjustments" },
 ];
 
+const PROVIDER_LABELS: Record<OAuthProvider, string> = {
+  github: "GitHub",
+  linear: "Linear",
+  slack: "Slack",
+};
+
 export function SettingsModal({ open, onClose, onSaved, initialSection = "github", deductions }: SettingsModalProps) {
   const [status, setStatus] = useState<ConfigStatus | null>(null);
   const [activeSection, setActiveSection] = useState<Section>("github");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // OAuth-specific UI state
+  const [popupBlocked, setPopupBlocked] = useState<Record<string, boolean>>({});
+  const [disconnectConfirm, setDisconnectConfirm] = useState<Record<string, boolean>>({});
+  const [showManualFields, setShowManualFields] = useState<Record<string, boolean>>({});
+  const [oauthDisconnected, setOAuthDisconnected] = useState<Record<string, boolean>>({});
+  const [oauthError, setOAuthError] = useState<Record<string, string | null>>({});
+  const [oauthSetupError, setOAuthSetupError] = useState<Record<string, string[] | null>>({});
+  const [docModalSlug, setDocModalSlug] = useState<DocSlug | null>(null);
+  const prevOAuthRef = useRef<Record<string, boolean>>({});
+
   // Form state for each integration
   const [github, setGithub] = useState({ token: "", org: "", repo: "" });
   const [linear, setLinear] = useState({ apiKey: "", teamId: "" });
-  const [slack, setSlack] = useState({ botToken: "", channelIds: "" });
+  const [slack, setSlack] = useState({ botToken: "", channelIds: "", teamMemberIds: "" });
   const [doraSettings, setDoraSettings] = useState({ source: "auto", environment: "production", incidentLabels: "incident,hotfix,production-bug" });
   const [ai, setAi] = useState({ provider: "ollama", anthropicKey: "", ollamaUrl: "", ollamaModel: "" });
   const [cacheTtl, setCacheTtl] = useState({ github: "", linear: "", slack: "", dora: "", healthSummary: "", weeklyNarrative: "" });
@@ -79,6 +115,26 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
       setActiveSection(initialSection);
     }
   }, [open, fetchStatus, initialSection]);
+
+  // Track OAuth connection transitions so we can show the "Connection lost"
+  // state when the token is revoked or refresh fails (D-08 / INTG-04).
+  useEffect(() => {
+    if (!status?.oauth) return;
+    const next: Record<string, boolean> = {};
+    for (const provider of ["github", "linear", "slack"] as const) {
+      const isConnected = !!status.oauth[provider]?.connected;
+      next[provider] = isConnected;
+      const wasConnected = prevOAuthRef.current[provider];
+      if (wasConnected && !isConnected) {
+        setOAuthDisconnected((prev) => ({ ...prev, [provider]: true }));
+      }
+      if (isConnected) {
+        // Clear "disconnected" flag once reconnected
+        setOAuthDisconnected((prev) => ({ ...prev, [provider]: false }));
+      }
+    }
+    prevOAuthRef.current = next;
+  }, [status?.oauth]);
 
   const handleSave = async (values: Record<string, string>) => {
     setSaving(true);
@@ -120,6 +176,7 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
     handleSave({
       SLACK_BOT_TOKEN: slack.botToken,
       SLACK_CHANNEL_IDS: slack.channelIds,
+      SLACK_TEAM_MEMBER_IDS: slack.teamMemberIds,
     });
 
   const saveDora = () =>
@@ -146,6 +203,49 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
       CACHE_TTL_HEALTH_SUMMARY: cacheTtl.healthSummary,
       CACHE_TTL_WEEKLY_NARRATIVE: cacheTtl.weeklyNarrative,
     });
+
+  const handleOAuthConnect = useCallback(
+    (provider: OAuthProvider) => {
+      setPopupBlocked((prev) => ({ ...prev, [provider]: false }));
+      setOAuthError((prev) => ({ ...prev, [provider]: null }));
+      setOAuthSetupError((prev) => ({ ...prev, [provider]: null }));
+      openOAuthPopup(
+        provider,
+        () => {
+          setOAuthDisconnected((prev) => ({ ...prev, [provider]: false }));
+          fetchStatus();
+          onSaved();
+        },
+        (_p, reason, detail) => {
+          if (reason === "popup_blocked") {
+            setPopupBlocked((prev) => ({ ...prev, [provider]: true }));
+          } else if (reason === "not-configured" && detail?.missingVars) {
+            setOAuthSetupError((prev) => ({ ...prev, [provider]: detail.missingVars ?? [] }));
+          } else {
+            setOAuthError((prev) => ({ ...prev, [provider]: reason }));
+          }
+        }
+      );
+    },
+    [fetchStatus, onSaved]
+  );
+
+  const handleDisconnect = useCallback(
+    async (provider: OAuthProvider) => {
+      await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "disconnect", provider }),
+      });
+      setDisconnectConfirm((prev) => ({ ...prev, [provider]: false }));
+      setOAuthDisconnected((prev) => ({ ...prev, [provider]: false }));
+      // Reset prev ref so the transition-tracking effect doesn't flag this as a revocation
+      prevOAuthRef.current[provider] = false;
+      fetchStatus();
+      onSaved();
+    },
+    [fetchStatus, onSaved]
+  );
 
   return (
     <Dialog.Root open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -211,10 +311,36 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
             )}
 
             {activeSection === "github" && (
-              <SectionForm
+              <OAuthSectionForm
+                provider="github"
                 title="GitHub"
                 description="Connect to GitHub to track PR metrics, cycle time, and review bottlenecks."
-                configured={status?.github}
+                oauthAccountName={status?.oauth?.github?.accountName ?? null}
+                oauthConnected={!!status?.oauth?.github?.connected}
+                envOrConfigActive={!!status?.github}
+                oauthDisconnected={!!oauthDisconnected.github}
+                popupBlocked={!!popupBlocked.github}
+                oauthErrorReason={oauthError.github ?? null}
+                showManualFields={!!showManualFields.github}
+                disconnectConfirm={!!disconnectConfirm.github}
+                onConnect={() => handleOAuthConnect("github")}
+                onDisconnectRequest={() =>
+                  setDisconnectConfirm((prev) => ({ ...prev, github: true }))
+                }
+                onDisconnectConfirm={() => handleDisconnect("github")}
+                onDisconnectCancel={() =>
+                  setDisconnectConfirm((prev) => ({ ...prev, github: false }))
+                }
+                onShowManual={() =>
+                  setShowManualFields((prev) => ({ ...prev, github: true }))
+                }
+                oauthScopeWarning="GitHub OAuth requires repo access (read + write permissions). Use a fine-grained PAT instead if write access is a concern."
+                provisioned={status?.oauthProvisioned?.github ?? { clientId: false, clientSecret: false, encryptionKey: false }}
+                setupError={oauthSetupError.github ?? null}
+                onClearSetupError={() => setOAuthSetupError((prev) => ({ ...prev, github: null }))}
+                onOpenDoc={(slug) => setDocModalSlug(slug)}
+                docSlug="github-oauth-setup"
+                onOpenFullGuide={(slug) => setDocModalSlug(slug)}
                 fields={[
                   {
                     label: "Personal Access Token",
@@ -223,7 +349,8 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
                     onChange: (v) => setGithub((s) => ({ ...s, token: v })),
                     type: "password",
                     hint: "Needs 'repo' scope",
-                    help: "1. Go to github.com > Settings > Developer settings > Personal access tokens > Tokens (classic)\n2. Click \"Generate new token (classic)\"\n3. Give it a name (e.g. \"Team Health Dashboard\")\n4. Under scopes, check \"repo\" (full control of private repositories)\n5. Click \"Generate token\" and copy the token (starts with ghp_)",
+                    help: OAUTH_HELP_STRINGS.GITHUB_TOKEN.helpText,
+                    fullGuideSlug: "github-oauth-setup",
                   },
                   {
                     label: "Organization",
@@ -246,10 +373,35 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
             )}
 
             {activeSection === "linear" && (
-              <SectionForm
+              <OAuthSectionForm
+                provider="linear"
                 title="Linear"
                 description="Connect to Linear to track sprint velocity, workload distribution, and time-in-state."
-                configured={status?.linear}
+                oauthAccountName={status?.oauth?.linear?.accountName ?? null}
+                oauthConnected={!!status?.oauth?.linear?.connected}
+                envOrConfigActive={!!status?.linear}
+                oauthDisconnected={!!oauthDisconnected.linear}
+                popupBlocked={!!popupBlocked.linear}
+                oauthErrorReason={oauthError.linear ?? null}
+                showManualFields={!!showManualFields.linear}
+                disconnectConfirm={!!disconnectConfirm.linear}
+                onConnect={() => handleOAuthConnect("linear")}
+                onDisconnectRequest={() =>
+                  setDisconnectConfirm((prev) => ({ ...prev, linear: true }))
+                }
+                onDisconnectConfirm={() => handleDisconnect("linear")}
+                onDisconnectCancel={() =>
+                  setDisconnectConfirm((prev) => ({ ...prev, linear: false }))
+                }
+                onShowManual={() =>
+                  setShowManualFields((prev) => ({ ...prev, linear: true }))
+                }
+                provisioned={status?.oauthProvisioned?.linear ?? { clientId: false, clientSecret: false, encryptionKey: false }}
+                setupError={oauthSetupError.linear ?? null}
+                onClearSetupError={() => setOAuthSetupError((prev) => ({ ...prev, linear: null }))}
+                onOpenDoc={(slug) => setDocModalSlug(slug)}
+                docSlug="linear-oauth-setup"
+                onOpenFullGuide={(slug) => setDocModalSlug(slug)}
                 fields={[
                   {
                     label: "API Key",
@@ -258,7 +410,8 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
                     onChange: (v) => setLinear((s) => ({ ...s, apiKey: v })),
                     type: "password",
                     hint: "Settings > API > Personal API keys",
-                    help: "1. Open Linear and click your avatar (bottom-left)\n2. Go to Settings > API\n3. Under \"Personal API keys\", click \"Create key\"\n4. Give it a label and click \"Create\"\n5. Copy the key (starts with lin_api_)",
+                    help: OAUTH_HELP_STRINGS.LINEAR_API_KEY.helpText,
+                    fullGuideSlug: "linear-oauth-setup",
                   },
                   {
                     label: "Team ID",
@@ -274,10 +427,35 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
             )}
 
             {activeSection === "slack" && (
-              <SectionForm
+              <OAuthSectionForm
+                provider="slack"
                 title="Slack"
                 description="Connect to Slack to track response times, channel activity, and team overload signals."
-                configured={status?.slack}
+                oauthAccountName={status?.oauth?.slack?.accountName ?? null}
+                oauthConnected={!!status?.oauth?.slack?.connected}
+                envOrConfigActive={!!status?.slack}
+                oauthDisconnected={!!oauthDisconnected.slack}
+                popupBlocked={!!popupBlocked.slack}
+                oauthErrorReason={oauthError.slack ?? null}
+                showManualFields={!!showManualFields.slack}
+                disconnectConfirm={!!disconnectConfirm.slack}
+                onConnect={() => handleOAuthConnect("slack")}
+                onDisconnectRequest={() =>
+                  setDisconnectConfirm((prev) => ({ ...prev, slack: true }))
+                }
+                onDisconnectConfirm={() => handleDisconnect("slack")}
+                onDisconnectCancel={() =>
+                  setDisconnectConfirm((prev) => ({ ...prev, slack: false }))
+                }
+                onShowManual={() =>
+                  setShowManualFields((prev) => ({ ...prev, slack: true }))
+                }
+                provisioned={status?.oauthProvisioned?.slack ?? { clientId: false, clientSecret: false, encryptionKey: false }}
+                setupError={oauthSetupError.slack ?? null}
+                onClearSetupError={() => setOAuthSetupError((prev) => ({ ...prev, slack: null }))}
+                onOpenDoc={(slug) => setDocModalSlug(slug)}
+                docSlug="slack-setup"
+                onOpenFullGuide={(slug) => setDocModalSlug(slug)}
                 fields={[
                   {
                     label: "Bot OAuth Token",
@@ -286,7 +464,8 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
                     onChange: (v) => setSlack((s) => ({ ...s, botToken: v })),
                     type: "password",
                     hint: "Needs channels:history, channels:read, users:read",
-                    help: "1. Go to api.slack.com/apps and click \"Create New App\" > \"From scratch\"\n2. Name it (e.g. \"Team Health\") and pick your workspace\n3. Go to OAuth & Permissions in the sidebar\n4. Under \"Bot Token Scopes\", add: channels:history, channels:read, users:read\n5. Click \"Install to Workspace\" at the top and authorize\n6. Copy the \"Bot User OAuth Token\" (starts with xoxb-)\n7. Invite the bot to each channel you want to monitor: /invite @Team Health",
+                    help: OAUTH_HELP_STRINGS.SLACK_BOT_TOKEN.helpText,
+                    fullGuideSlug: "slack-setup",
                   },
                   {
                     label: "Channel IDs",
@@ -297,6 +476,23 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
                     help: "To find a channel ID:\n1. Open Slack and right-click on the channel name\n2. Click \"View channel details\" (or \"Copy link\")\n3. The channel ID is at the bottom of the details panel, or the last segment of the copied link\n\nIt looks like C01ABC2DEF3. Add multiple IDs separated by commas.",
                   },
                 ]}
+                extraFields={
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                      Team member filter
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={slack.teamMemberIds}
+                      onChange={(e) => setSlack((s) => ({ ...s, teamMemberIds: e.target.value }))}
+                      className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      placeholder="U01234ABC, U05678DEF"
+                    />
+                    <p className="text-xs font-normal text-zinc-500">
+                      Enter Slack member IDs (e.g. U01234ABC), one per line or comma-separated. Leave blank to include all members.
+                    </p>
+                  </div>
+                }
                 onSave={saveSlack}
                 saving={saving}
               />
@@ -505,6 +701,11 @@ export function SettingsModal({ open, onClose, onSaved, initialSection = "github
           </div>
         </Dialog.Content>
       </Dialog.Portal>
+      <DocViewerModal
+        open={docModalSlug !== null}
+        onClose={() => setDocModalSlug(null)}
+        slug={docModalSlug}
+      />
     </Dialog.Root>
   );
 }
@@ -554,15 +755,9 @@ function Field({
   type = "text",
   hint,
   help,
-}: {
-  label: string;
-  placeholder: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  hint?: string;
-  help?: string;
-}) {
+  fullGuideSlug,
+  onOpenFullGuide,
+}: FieldSpec & { onOpenFullGuide?: (slug: DocSlug) => void }) {
   return (
     <div>
       <label className="mb-1 flex items-center text-xs font-normal text-zinc-700 dark:text-zinc-300">
@@ -577,9 +772,29 @@ function Field({
         className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500"
       />
       {hint && <p className="mt-1 text-xs text-zinc-400">{hint}</p>}
+      {fullGuideSlug && onOpenFullGuide && (
+        <button
+          type="button"
+          onClick={() => onOpenFullGuide(fullGuideSlug)}
+          className="mt-1 text-xs font-normal text-zinc-500 underline cursor-pointer"
+        >
+          Full guide
+        </button>
+      )}
     </div>
   );
 }
+
+type FieldSpec = {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  hint?: string;
+  help?: string;
+  fullGuideSlug?: DocSlug;
+};
 
 function SectionForm({
   title,
@@ -592,7 +807,7 @@ function SectionForm({
   title: string;
   description: string;
   configured?: boolean;
-  fields: { label: string; placeholder: string; value: string; onChange: (v: string) => void; type?: string; hint?: string; help?: string }[];
+  fields: FieldSpec[];
   onSave: () => void;
   saving: boolean;
 }) {
@@ -625,6 +840,262 @@ function SectionForm({
       >
         {saving ? "Saving..." : "Save"}
       </button>
+    </div>
+  );
+}
+
+function OAuthSectionForm({
+  provider,
+  title,
+  description,
+  oauthAccountName,
+  oauthConnected,
+  envOrConfigActive,
+  oauthDisconnected,
+  popupBlocked,
+  oauthErrorReason,
+  showManualFields,
+  disconnectConfirm,
+  onConnect,
+  onDisconnectRequest,
+  onDisconnectConfirm,
+  onDisconnectCancel,
+  onShowManual,
+  oauthScopeWarning,
+  fields,
+  extraFields,
+  onSave,
+  saving,
+  provisioned,
+  setupError,
+  onClearSetupError,
+  onOpenDoc,
+  docSlug,
+  onOpenFullGuide,
+}: {
+  provider: OAuthProvider;
+  title: string;
+  description: string;
+  oauthAccountName: string | null;
+  oauthConnected: boolean;
+  envOrConfigActive: boolean;
+  oauthDisconnected: boolean;
+  popupBlocked: boolean;
+  oauthErrorReason: string | null;
+  showManualFields: boolean;
+  disconnectConfirm: boolean;
+  onConnect: () => void;
+  onDisconnectRequest: () => void;
+  onDisconnectConfirm: () => void;
+  onDisconnectCancel: () => void;
+  onShowManual: () => void;
+  oauthScopeWarning?: string;
+  fields: FieldSpec[];
+  extraFields?: React.ReactNode;
+  onSave: () => void;
+  saving: boolean;
+  provisioned: { clientId: boolean; clientSecret: boolean; encryptionKey: boolean };
+  setupError: string[] | null;
+  onClearSetupError: () => void;
+  onOpenDoc: (slug: DocSlug) => void;
+  docSlug: DocSlug;
+  onOpenFullGuide: (slug: DocSlug) => void;
+}) {
+  const providerLabel = PROVIDER_LABELS[provider];
+  // Priority: env/config takes precedence over OAuth (per D-09 and UI-SPEC State Matrix).
+  // When env/config is active, always show the manual form.
+  const envPrecedence = envOrConfigActive && !oauthConnected;
+  const showConnectedState = !envPrecedence && oauthConnected;
+  const showDisconnectedAlert =
+    !envPrecedence && !oauthConnected && oauthDisconnected;
+  const fullyProvisioned = provisioned.clientId && provisioned.clientSecret && provisioned.encryptionKey;
+  const showConnectButton =
+    !envPrecedence && !oauthConnected && !oauthDisconnected && fullyProvisioned;
+  const showSetUpOAuthLink =
+    !envPrecedence && !oauthConnected && !oauthDisconnected && !fullyProvisioned;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          {title}
+        </h3>
+        <p className="mt-1 text-xs text-zinc-500">{description}</p>
+        {envPrecedence && (
+          <span className="mt-2 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-normal text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+            Configured
+          </span>
+        )}
+      </div>
+
+      {showConnectedState && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              Connected
+            </span>
+            {oauthAccountName && (
+              <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">
+                as {oauthAccountName}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {disconnectConfirm ? (
+              <>
+                <button
+                  onClick={onDisconnectConfirm}
+                  className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-normal text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  Confirm disconnect
+                </button>
+                <button
+                  onClick={onDisconnectCancel}
+                  className="text-xs font-normal text-zinc-500 underline cursor-pointer"
+                >
+                  Keep connected
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={onDisconnectRequest}
+                className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-normal text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                Disconnect {providerLabel}
+              </button>
+            )}
+            {!showManualFields && (
+              <button
+                onClick={onShowManual}
+                className="text-xs font-normal text-zinc-500 underline cursor-pointer"
+              >
+                Use API key instead
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showDisconnectedAlert && (
+        <div className="space-y-2">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                Connection lost
+              </span>
+            </div>
+            <p className="mt-1 text-sm font-normal text-red-700 dark:text-red-300">
+              Your {providerLabel} token was revoked or expired. Reconnect to restore data.
+            </p>
+          </div>
+          <button
+            onClick={onConnect}
+            className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-normal text-white dark:bg-zinc-100 dark:text-zinc-900"
+          >
+            Reconnect via OAuth
+          </button>
+          {!showManualFields && (
+            <button
+              onClick={onShowManual}
+              className="block text-xs font-normal text-zinc-500 underline cursor-pointer"
+            >
+              or use API key instead
+            </button>
+          )}
+          {popupBlocked && (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Popup blocked. Allow popups for this site and try again.
+            </p>
+          )}
+        </div>
+      )}
+
+      {showConnectButton && (
+        <div className="space-y-2">
+          <button
+            onClick={onConnect}
+            className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-normal text-white dark:bg-zinc-100 dark:text-zinc-900"
+          >
+            Connect via {providerLabel} OAuth
+          </button>
+          {oauthScopeWarning && (
+            <p className="mt-1 text-xs font-normal text-zinc-500">
+              {oauthScopeWarning}
+            </p>
+          )}
+          {!showManualFields && (
+            <button
+              onClick={onShowManual}
+              className="block text-xs font-normal text-zinc-500 underline cursor-pointer"
+            >
+              or use API key instead
+            </button>
+          )}
+          {popupBlocked && (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Popup blocked. Allow popups for this site and try again.
+            </p>
+          )}
+          {oauthErrorReason && !popupBlocked && (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              OAuth failed: {oauthErrorReason}. Try again or use an API key.
+            </p>
+          )}
+        </div>
+      )}
+
+      {showSetUpOAuthLink && (
+        <div className="space-y-2">
+          <p className="text-sm font-normal text-zinc-600 dark:text-zinc-400">
+            OAuth not yet configured. Complete setup to enable Connect.
+          </p>
+          <button
+            type="button"
+            onClick={() => onOpenDoc(docSlug)}
+            className="text-sm font-normal text-zinc-900 underline cursor-pointer dark:text-zinc-100"
+          >
+            Set up OAuth
+          </button>
+          {!showManualFields && (
+            <button
+              onClick={onShowManual}
+              className="block text-xs font-normal text-zinc-500 underline cursor-pointer"
+            >
+              or use API key instead
+            </button>
+          )}
+        </div>
+      )}
+
+      {setupError && setupError.length > 0 && (
+        <ConnectErrorAlert
+          provider={provider}
+          missingVars={setupError}
+          onOpenSetup={() => onOpenDoc(docSlug)}
+          onClose={onClearSetupError}
+        />
+      )}
+
+      {(envPrecedence || showManualFields) && (
+        <>
+          {fields.map((field) => (
+            <Field key={field.label} {...field} onOpenFullGuide={onOpenFullGuide} />
+          ))}
+          {extraFields}
+          <p className="text-xs text-zinc-400">
+            Only fill in fields you want to update. Blank fields are ignored.
+          </p>
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </>
+      )}
     </div>
   );
 }

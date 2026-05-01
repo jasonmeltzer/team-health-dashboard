@@ -8,6 +8,16 @@ export interface ConfigStatus {
   ai: boolean;
   dora: boolean;
   aiProvider?: string;
+  oauth?: {
+    github: { connected: boolean; accountName: string | null };
+    linear: { connected: boolean; accountName: string | null };
+    slack: { connected: boolean; accountName: string | null };
+  };
+  oauthProvisioned?: {
+    github: { clientId: boolean; clientSecret: boolean; encryptionKey: boolean };
+    linear: { clientId: boolean; clientSecret: boolean; encryptionKey: boolean };
+    slack: { clientId: boolean; clientSecret: boolean; encryptionKey: boolean };
+  };
 }
 
 export function useConfigStatus(refreshKey?: number) {
@@ -25,6 +35,8 @@ export function useConfigStatus(refreshKey?: number) {
           ai: !!json.data.ai,
           dora: !!json.data.dora,
           aiProvider: json.data.aiProvider,
+          oauth: json.data.oauth || undefined,
+          oauthProvisioned: json.data.oauthProvisioned || undefined,
         });
       }
     } catch {

@@ -1,6 +1,6 @@
 import type { LinearMetrics, VelocityDataPoint, StalledIssue, WorkloadEntry, TimeInStateStats, TimeInStateData, TimeInStateIssue, LeadTimeTrendPoint, CycleSummary, ScopeChange, ScopeChangeSummary } from "@/types/linear";
 import { daysBetween } from "@/lib/utils";
-import { getConfig } from "@/lib/config";
+import { getConfigAsync } from "@/lib/config";
 import { RateLimitError } from "@/lib/errors";
 import { writeCycleSnapshot, getLatestCycleSnapshot, getEarliestCycleSnapshot, diffSnapshots } from "@/lib/db";
 
@@ -11,7 +11,7 @@ async function linearQuery<T>(query: string, variables?: Record<string, unknown>
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: getConfig("LINEAR_API_KEY")!,
+      Authorization: (await getConfigAsync("LINEAR_API_KEY"))!,
     },
     body: JSON.stringify({ query, variables }),
   });
